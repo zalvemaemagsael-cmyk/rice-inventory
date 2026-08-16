@@ -14,8 +14,11 @@ export const emptyData = () => ({
   suppliers: [
     { id: "sp_seed_1", name: "Sample Supplier - Nueva Ecija Mill", contact: "" },
   ],
+  buyers: [],
   supplierPurchases: [],
   rawPurchases: [],
   millings: [],
   stockOuts: [],
+  payments: [],
+  expenses: [],
 });

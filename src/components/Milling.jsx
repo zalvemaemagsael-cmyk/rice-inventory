@@ -1,34 +1,57 @@
 import React, { useState } from "react";
-import { Cog, Plus, Trash2 } from "lucide-react";
+import { Cog, Plus, Trash2, Pencil, X } from "lucide-react";
 import { todayStr, fmtDate, fmtNum } from "../lib/format.js";
 import { EmptyState } from "./ui.jsx";
 
-export default function Milling({ data, rawStockKg, addMilling, deleteMilling, riceTypeName }) {
-  const [form, setForm] = useState({
+export default function Milling({ data, rawStockKg, addMilling, updateMilling, deleteMilling, riceTypeName }) {
+  const blankForm = {
     date: todayStr(),
     riceTypeId: data.riceTypes[0]?.id || "",
     rawQuantityKg: "",
     outputQuantity: "",
     notes: "",
-  });
+  };
+  const [form, setForm] = useState(blankForm);
+  const [editingId, setEditingId] = useState(null);
   const disabled = data.riceTypes.length === 0;
+
+  const startEdit = (m) => {
+    setEditingId(m.id);
+    setForm({
+      date: m.date,
+      riceTypeId: m.riceTypeId,
+      rawQuantityKg: String(m.rawQuantityKg),
+      outputQuantity: String(m.outputQuantity),
+      notes: m.notes || "",
+    });
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(blankForm);
+  };
 
   const submit = (e) => {
     e.preventDefault();
     if (!form.riceTypeId || !form.rawQuantityKg || !form.outputQuantity) return;
-    addMilling({
+    const payload = {
       date: form.date,
       riceTypeId: form.riceTypeId,
       rawQuantityKg: Number(form.rawQuantityKg),
       outputQuantity: Number(form.outputQuantity),
       notes: form.notes,
-    });
-    setForm({ ...form, rawQuantityKg: "", outputQuantity: "", notes: "" });
+    };
+    if (editingId) {
+      updateMilling(editingId, payload);
+      setEditingId(null);
+    } else {
+      addMilling(payload);
+    }
+    setForm(blankForm);
   };
 
   return (
     <div>
-      <div className="section-label">Mill unmilled palay into finished stock</div>
+      <div className="section-label">{editingId ? "Edit milling entry" : "Mill unmilled palay into finished stock"}</div>
       <div className="raw-card" style={{ marginBottom: 14 }}>
         <div>
           <div className="stock-name">Available to mill</div>
@@ -71,7 +94,16 @@ export default function Milling({ data, rawStockKg, addMilling, deleteMilling, r
                 onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </label>
           </div>
-          <button type="submit" className="btn-primary"><Plus size={16} /> Record milling</button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button type="submit" className="btn-primary">
+              {editingId ? <Pencil size={16} /> : <Plus size={16} />} {editingId ? "Update milling" : "Record milling"}
+            </button>
+            {editingId && (
+              <button type="button" className="icon-btn" onClick={cancelEdit} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <X size={15} /> Cancel
+              </button>
+            )}
+          </div>
         </form>
       )}
 
@@ -93,9 +125,14 @@ export default function Milling({ data, rawStockKg, addMilling, deleteMilling, r
                 {m.notes && <div className="receipt-notes">{m.notes}</div>}
               </div>
               <div className="receipt-right">
-                <button className="icon-btn" onClick={() => deleteMilling(m.id)} title="Delete">
-                  <Trash2 size={15} />
-                </button>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button className="icon-btn" onClick={() => startEdit(m)} title="Edit">
+                    <Pencil size={15} />
+                  </button>
+                  <button className="icon-btn" onClick={() => deleteMilling(m.id)} title="Delete">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}

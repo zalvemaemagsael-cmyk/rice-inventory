@@ -1,25 +1,43 @@
 import React, { useState } from "react";
-import { Truck, Plus, Trash2 } from "lucide-react";
+import { Truck, Plus, Trash2, Pencil, X } from "lucide-react";
 import { todayStr, fmtDate, fmtNum } from "../lib/format.js";
 import { EmptyState } from "./ui.jsx";
 
-export default function SupplierPurchases({ data, addSupplierPurchase, deleteSupplierPurchase, riceTypeName, supplierName }) {
-  const [form, setForm] = useState({
+export default function SupplierPurchases({ data, addSupplierPurchase, updateSupplierPurchase, deleteSupplierPurchase, riceTypeName, supplierName }) {
+  const blankForm = {
     date: todayStr(),
     supplierId: data.suppliers[0]?.id || "",
     riceTypeId: data.riceTypes[0]?.id || "",
     quantity: "",
     pricePerUnit: "",
     notes: "",
-  });
+  };
+  const [form, setForm] = useState(blankForm);
+  const [editingId, setEditingId] = useState(null);
 
   const disabled = data.riceTypes.length === 0 || data.suppliers.length === 0;
   const total = (Number(form.quantity) || 0) * (Number(form.pricePerUnit) || 0);
 
+  const startEdit = (p) => {
+    setEditingId(p.id);
+    setForm({
+      date: p.date,
+      supplierId: p.supplierId,
+      riceTypeId: p.riceTypeId,
+      quantity: String(p.quantity),
+      pricePerUnit: String(p.pricePerUnit),
+      notes: p.notes || "",
+    });
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(blankForm);
+  };
+
   const submit = (e) => {
     e.preventDefault();
     if (!form.quantity || !form.pricePerUnit || !form.riceTypeId || !form.supplierId) return;
-    addSupplierPurchase({
+    const payload = {
       date: form.date,
       supplierId: form.supplierId,
       riceTypeId: form.riceTypeId,
@@ -27,13 +45,19 @@ export default function SupplierPurchases({ data, addSupplierPurchase, deleteSup
       pricePerUnit: Number(form.pricePerUnit),
       totalCost: total,
       notes: form.notes,
-    });
-    setForm({ ...form, quantity: "", pricePerUnit: "", notes: "" });
+    };
+    if (editingId) {
+      updateSupplierPurchase(editingId, payload);
+      setEditingId(null);
+    } else {
+      addSupplierPurchase(payload);
+    }
+    setForm(blankForm);
   };
 
   return (
     <div>
-      <div className="section-label">Buy already-milled rice from a supplier</div>
+      <div className="section-label">{editingId ? "Edit supplier purchase" : "Buy already-milled rice from a supplier"}</div>
       <div className="hint-line">Each rice type can carry its own price from each supplier.</div>
       {disabled ? (
         <EmptyState
@@ -86,7 +110,16 @@ export default function SupplierPurchases({ data, addSupplierPurchase, deleteSup
             <input type="text" placeholder="e.g. delivery ref, quality note" value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </label>
-          <button type="submit" className="btn-primary"><Plus size={16} /> Record purchase</button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button type="submit" className="btn-primary">
+              {editingId ? <Pencil size={16} /> : <Plus size={16} />} {editingId ? "Update purchase" : "Record purchase"}
+            </button>
+            {editingId && (
+              <button type="button" className="icon-btn" onClick={cancelEdit} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <X size={15} /> Cancel
+              </button>
+            )}
+          </div>
         </form>
       )}
 
@@ -109,9 +142,14 @@ export default function SupplierPurchases({ data, addSupplierPurchase, deleteSup
               </div>
               <div className="receipt-right">
                 <div className="receipt-total">₱ {fmtNum(p.totalCost)}</div>
-                <button className="icon-btn" onClick={() => deleteSupplierPurchase(p.id)} title="Delete">
-                  <Trash2 size={15} />
-                </button>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button className="icon-btn" onClick={() => startEdit(p)} title="Edit">
+                    <Pencil size={15} />
+                  </button>
+                  <button className="icon-btn" onClick={() => deleteSupplierPurchase(p.id)} title="Delete">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}

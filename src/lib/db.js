@@ -19,10 +19,13 @@ export const supabase = isCloudConfigured
 export const TABLES = {
   riceTypes: { table: "rice_types", orderBy: "createdAt", ascending: true },
   suppliers: { table: "suppliers", orderBy: "createdAt", ascending: true },
+  buyers: { table: "buyers", orderBy: "createdAt", ascending: true },
   supplierPurchases: { table: "supplier_purchases", orderBy: "createdAt", ascending: false },
   rawPurchases: { table: "raw_purchases", orderBy: "createdAt", ascending: false },
   millings: { table: "millings", orderBy: "createdAt", ascending: false },
   stockOuts: { table: "stock_outs", orderBy: "createdAt", ascending: false },
+  payments: { table: "payments", orderBy: "createdAt", ascending: false },
+  expenses: { table: "expenses", orderBy: "createdAt", ascending: false },
 };
 
 // Loads every table and returns the same shaped object App.jsx already
@@ -55,6 +58,12 @@ export async function insertRow(key, row) {
   if (error) throw new Error(error.message);
 }
 
+export async function updateRow(key, id, patch) {
+  const { table } = TABLES[key];
+  const { error } = await supabase.from(table).update(patch).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function deleteRow(key, id) {
   const { table } = TABLES[key];
   const { error } = await supabase.from(table).delete().eq("id", id);
@@ -63,8 +72,10 @@ export async function deleteRow(key, id) {
 
 // Pushes an entire local dataset (e.g. from an old localStorage backup)
 // into the cloud tables in one go. Used by the one-time import banner.
+// Order matters: tables referenced by others (riceTypes, suppliers,
+// buyers) must be inserted before the tables that reference them.
 export async function importAll(data) {
-  for (const key of ["riceTypes", "suppliers", "supplierPurchases", "rawPurchases", "millings", "stockOuts"]) {
+  for (const key of ["riceTypes", "suppliers", "buyers", "supplierPurchases", "rawPurchases", "millings", "stockOuts", "payments", "expenses"]) {
     const rows = data[key] || [];
     if (rows.length === 0) continue;
     const { table } = TABLES[key];

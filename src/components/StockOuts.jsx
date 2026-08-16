@@ -1,18 +1,21 @@
 import React, { useState } from "react";
-import { Package, Plus, Trash2 } from "lucide-react";
+import { Package, Plus, Trash2, Pencil, X } from "lucide-react";
 import { todayStr, fmtDate, fmtNum, kgPerUnit } from "../lib/format.js";
 import { EmptyState } from "./ui.jsx";
 
-export default function StockOuts({ data, stockByType, addStockOut, deleteStockOut, riceTypeName }) {
-  const [form, setForm] = useState({
+export default function StockOuts({ data, stockByType, addStockOut, updateStockOut, deleteStockOut, riceTypeName, buyerName }) {
+  const blankForm = {
     date: todayStr(),
     riceTypeId: data.riceTypes[0]?.id || "",
     quantity: "",
     quantityUnit: "native", // "native" = the rice type's own unit (e.g. sack), "kg" = kilograms
     reason: "Sale",
     pricePerUnit: "",
+    buyerId: "",
     notes: "",
-  });
+  };
+  const [form, setForm] = useState(blankForm);
+  const [editingId, setEditingId] = useState(null);
   const disabled = data.riceTypes.length === 0;
   const isSale = form.reason === "Sale";
 
@@ -30,25 +33,50 @@ export default function StockOuts({ data, stockByType, addStockOut, deleteStockO
 
   const total = nativeQuantity * (Number(form.pricePerUnit) || 0);
 
+  const startEdit = (s) => {
+    setEditingId(s.id);
+    setForm({
+      date: s.date,
+      riceTypeId: s.riceTypeId,
+      quantity: String(s.quantity),
+      quantityUnit: "native",
+      reason: s.reason,
+      pricePerUnit: s.pricePerUnit ? String(s.pricePerUnit) : "",
+      buyerId: s.buyerId || "",
+      notes: s.notes || "",
+    });
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(blankForm);
+  };
+
   const submit = (e) => {
     e.preventDefault();
     if (!form.quantity || !form.riceTypeId) return;
     if (isSale && !form.pricePerUnit) return;
-    addStockOut({
+    const payload = {
       date: form.date,
       riceTypeId: form.riceTypeId,
       quantity: nativeQuantity,
       reason: form.reason,
       pricePerUnit: isSale ? Number(form.pricePerUnit) : 0,
       totalAmount: isSale ? total : 0,
+      buyerId: isSale && form.buyerId ? form.buyerId : null,
       notes: form.notes,
-    });
-    setForm({ ...form, quantity: "", pricePerUnit: "", notes: "" });
+    };
+    if (editingId) {
+      updateStockOut(editingId, payload);
+      setEditingId(null);
+    } else {
+      addStockOut(payload);
+    }
+    setForm(blankForm);
   };
 
   return (
     <div>
-      <div className="section-label">Record finished stock leaving the warehouse</div>
+      <div className="section-label">{editingId ? "Edit stock-out" : "Record finished stock leaving the warehouse"}</div>
       {disabled ? (
         <EmptyState icon={Package} title="Add a rice type first" body="Stock-outs need a rice type to record against." />
       ) : (
@@ -111,13 +139,45 @@ export default function StockOuts({ data, stockByType, addStockOut, deleteStockO
                 </label>
               </>
             )}
+          </div>
+          {isSale && (
+            <div className="form-row">
+              <label>
+                Buyer (optional — for credit/utang tracking)
+                <select value={form.buyerId} onChange={(e) => setForm({ ...form, buyerId: e.target.value })}>
+                  <option value="">— walk-in / cash sale —</option>
+                  {data.buyers.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="full">
+                Notes (optional)
+                <input type="text" placeholder="e.g. additional details" value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              </label>
+            </div>
+          )}
+          {!isSale && (
             <label className="full">
               Notes (optional)
-              <input type="text" placeholder="e.g. buyer name" value={form.notes}
+              <input type="text" placeholder="e.g. reason for adjustment" value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </label>
+          )}
+          {isSale && data.buyers.length === 0 && (
+            <div className="hint-line">No buyers added yet — add one in the Buyers tab if this sale is on credit.</div>
+          )}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button type="submit" className="btn-primary">
+              {editingId ? <Pencil size={16} /> : <Plus size={16} />} {editingId ? "Update stock-out" : "Record stock-out"}
+            </button>
+            {editingId && (
+              <button type="button" className="icon-btn" onClick={cancelEdit} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <X size={15} /> Cancel
+              </button>
+            )}
           </div>
-          <button type="submit" className="btn-primary"><Plus size={16} /> Record stock-out</button>
         </form>
       )}
 
@@ -126,27 +186,36 @@ export default function StockOuts({ data, stockByType, addStockOut, deleteStockO
         <EmptyState icon={Package} title="No stock-outs yet" body="Sales, damage, or adjustments will appear here." />
       ) : (
         <div className="receipt-list">
-          {data.stockOuts.map((s) => (
-            <div className="receipt" key={s.id}>
-              <div className="receipt-main">
-                <div className="receipt-line1">
-                  <strong>{riceTypeName(s.riceTypeId)}</strong>
-                  <span className="receipt-date">{fmtDate(s.date)}</span>
+          {data.stockOuts.map((s) => {
+            const buyer = s.buyerId ? buyerName(s.buyerId) : null;
+            return (
+              <div className="receipt" key={s.id}>
+                <div className="receipt-main">
+                  <div className="receipt-line1">
+                    <strong>{riceTypeName(s.riceTypeId)}</strong>
+                    <span className="receipt-date">{fmtDate(s.date)}</span>
+                  </div>
+                  <div className="receipt-line2">
+                    {fmtNum(s.quantity)} — {s.reason}
+                    {s.reason === "Sale" && s.pricePerUnit ? ` @ ₱${fmtNum(s.pricePerUnit)}` : ""}
+                    {buyer ? ` — ${buyer} (credit)` : ""}
+                  </div>
+                  {s.notes && <div className="receipt-notes">{s.notes}</div>}
                 </div>
-                <div className="receipt-line2">
-                  {fmtNum(s.quantity)} — {s.reason}
-                  {s.reason === "Sale" && s.pricePerUnit ? ` @ ₱${fmtNum(s.pricePerUnit)}` : ""}
+                <div className="receipt-right">
+                  {s.reason === "Sale" && <div className="receipt-total">₱ {fmtNum(s.totalAmount)}</div>}
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button className="icon-btn" onClick={() => startEdit(s)} title="Edit">
+                      <Pencil size={15} />
+                    </button>
+                    <button className="icon-btn" onClick={() => deleteStockOut(s.id)} title="Delete">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
-                {s.notes && <div className="receipt-notes">{s.notes}</div>}
               </div>
-              <div className="receipt-right">
-                {s.reason === "Sale" && <div className="receipt-total">₱ {fmtNum(s.totalAmount)}</div>}
-                <button className="icon-btn" onClick={() => deleteStockOut(s.id)} title="Delete">
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

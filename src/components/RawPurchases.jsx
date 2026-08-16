@@ -1,17 +1,19 @@
 import React, { useState } from "react";
-import { Sprout, Plus, Trash2 } from "lucide-react";
+import { Sprout, Plus, Trash2, Pencil, X } from "lucide-react";
 import { todayStr, fmtDate, fmtNum, travelFeeFor } from "../lib/format.js";
 import { EmptyState } from "./ui.jsx";
 
-export default function RawPurchases({ data, rawPurchaseCostTotal, addRawPurchase, deleteRawPurchase }) {
-  const [form, setForm] = useState({
+export default function RawPurchases({ data, rawPurchaseCostTotal, addRawPurchase, updateRawPurchase, deleteRawPurchase }) {
+  const blankForm = {
     date: todayStr(),
     source: "",
     quantityKg: "",
     pricePerKg: "",
     sackSizeKg: "",
     notes: "",
-  });
+  };
+  const [form, setForm] = useState(blankForm);
+  const [editingId, setEditingId] = useState(null);
 
   const quantityKg = Number(form.quantityKg) || 0;
   const sackSizeKg = Number(form.sackSizeKg) || 0;
@@ -22,10 +24,26 @@ export default function RawPurchases({ data, rawPurchaseCostTotal, addRawPurchas
   const goodsCost = quantityKg * (Number(form.pricePerKg) || 0);
   const total = goodsCost + travelFee;
 
+  const startEdit = (p) => {
+    setEditingId(p.id);
+    setForm({
+      date: p.date,
+      source: p.source,
+      quantityKg: String(p.quantityKg),
+      pricePerKg: String(p.pricePerKg),
+      sackSizeKg: p.sackSizeKg ? String(p.sackSizeKg) : "",
+      notes: p.notes || "",
+    });
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(blankForm);
+  };
+
   const submit = (e) => {
     e.preventDefault();
     if (!form.quantityKg || !form.pricePerKg || !form.source) return;
-    addRawPurchase({
+    const payload = {
       date: form.date,
       source: form.source,
       quantityKg,
@@ -34,13 +52,19 @@ export default function RawPurchases({ data, rawPurchaseCostTotal, addRawPurchas
       travelFee,
       totalCost: total,
       notes: form.notes,
-    });
-    setForm({ ...form, source: "", quantityKg: "", pricePerKg: "", sackSizeKg: "", notes: "" });
+    };
+    if (editingId) {
+      updateRawPurchase(editingId, payload);
+      setEditingId(null);
+    } else {
+      addRawPurchase(payload);
+    }
+    setForm(blankForm);
   };
 
   return (
     <div>
-      <div className="section-label">Buy unmilled palay locally (by weight)</div>
+      <div className="section-label">{editingId ? "Edit raw purchase" : "Buy unmilled palay locally (by weight)"}</div>
       <div className="hint-line">Weights vary by delivery - enter each one as it's bought, then mill it in the Milling tab.</div>
       <form className="form-card" onSubmit={submit}>
         <div className="form-row">
@@ -93,7 +117,16 @@ export default function RawPurchases({ data, rawPurchaseCostTotal, addRawPurchas
         <div className="hint-line">
           Travel fee is automatic: ₱10 for 40kg or more, ₱7 for 30-39kg, ₱5 below that.
         </div>
-        <button type="submit" className="btn-primary"><Plus size={16} /> Record raw purchase</button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button type="submit" className="btn-primary">
+            {editingId ? <Pencil size={16} /> : <Plus size={16} />} {editingId ? "Update purchase" : "Record raw purchase"}
+          </button>
+          {editingId && (
+            <button type="button" className="icon-btn" onClick={cancelEdit} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <X size={15} /> Cancel
+            </button>
+          )}
+        </div>
       </form>
 
       <div className="section-label" style={{ marginTop: 28, display: "flex", justifyContent: "space-between" }}>
@@ -122,9 +155,14 @@ export default function RawPurchases({ data, rawPurchaseCostTotal, addRawPurchas
                 </div>
                 <div className="receipt-right">
                   <div className="receipt-total">₱ {fmtNum(p.totalCost)}</div>
-                  <button className="icon-btn" onClick={() => deleteRawPurchase(p.id)} title="Delete">
-                    <Trash2 size={15} />
-                  </button>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button className="icon-btn" onClick={() => startEdit(p)} title="Edit">
+                      <Pencil size={15} />
+                    </button>
+                    <button className="icon-btn" onClick={() => deleteRawPurchase(p.id)} title="Delete">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
               </div>
             );

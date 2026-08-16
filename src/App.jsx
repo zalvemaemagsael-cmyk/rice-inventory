@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { emptyData } from "./data/emptyData.js";
 import { loadData as loadLocalData, saveData as saveLocalData } from "./lib/storage.js";
-import { isCloudConfigured, loadAll, isCloudEmpty, insertRow, deleteRow, importAll, subscribeToChanges } from "./lib/db.js";
+import { isCloudConfigured, loadAll, isCloudEmpty, insertRow, updateRow, deleteRow, importAll, subscribeToChanges } from "./lib/db.js";
 import { uid } from "./lib/format.js";
 import Header from "./components/Header.jsx";
 import TabNav from "./components/TabNav.jsx";
@@ -12,6 +12,8 @@ import Milling from "./components/Milling.jsx";
 import StockOuts from "./components/StockOuts.jsx";
 import RiceTypes from "./components/RiceTypes.jsx";
 import Suppliers from "./components/Suppliers.jsx";
+import Buyers from "./components/Buyers.jsx";
+import Expenses from "./components/Expenses.jsx";
 import Reports from "./components/Reports.jsx";
 
 export default function App({ onLogout }) {
@@ -126,6 +128,30 @@ export default function App({ onLogout }) {
     return map;
   }, [data]);
 
+  // Total of every recorded expense (milling labor, electricity, etc.) —
+  // feeds into the Reports tab's cost/profit figures.
+  const totalExpenses = useMemo(() => {
+    if (!data) return 0;
+    return data.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+  }, [data]);
+
+  // Each buyer's running balance: their linked "Sale" stock-outs minus
+  // their recorded payments. Positive = they still owe you (utang).
+  const buyerBalances = useMemo(() => {
+    if (!data) return {};
+    const map = {};
+    for (const b of data.buyers) map[b.id] = 0;
+    for (const s of data.stockOuts) {
+      if (s.reason === "Sale" && s.buyerId) {
+        map[s.buyerId] = (map[s.buyerId] || 0) + (s.totalAmount || 0);
+      }
+    }
+    for (const pay of data.payments) {
+      if (pay.buyerId) map[pay.buyerId] = (map[pay.buyerId] || 0) - (pay.amount || 0);
+    }
+    return map;
+  }, [data]);
+
   // Now that every hook has run, it's safe to bail out early while data
   // is still loading (or failed to load).
   if (loadError) {
@@ -169,6 +195,13 @@ export default function App({ onLogout }) {
     setData(localNext);
     insertRow(key, row).catch((e) => {
       showToast(`Couldn't save: ${e.message}`);
+      reload();
+    });
+  };
+  const withCloudUpdate = (key, localNext, id, patch) => {
+    setData(localNext);
+    updateRow(key, id, patch).catch((e) => {
+      showToast(`Couldn't save changes: ${e.message}`);
       reload();
     });
   };
@@ -216,11 +249,32 @@ export default function App({ onLogout }) {
     isCloudConfigured ? withCloudDelete("suppliers", next, id) : persistLocal(next);
   };
 
+  const addBuyer = (b) => {
+    const row = { ...b, id: uid("by") };
+    const next = { ...data, buyers: [...data.buyers, row] };
+    isCloudConfigured ? withCloud("buyers", next, row) : persistLocal(next);
+  };
+  const deleteBuyer = (id) => {
+    const inUse =
+      data.stockOuts.some((s) => s.buyerId === id) || data.payments.some((p) => p.buyerId === id);
+    if (inUse) {
+      showToast("Can't remove — this buyer has sales or payment history.");
+      return;
+    }
+    const next = { ...data, buyers: data.buyers.filter((b) => b.id !== id) };
+    isCloudConfigured ? withCloudDelete("buyers", next, id) : persistLocal(next);
+  };
+
   const addSupplierPurchase = (p) => {
     const row = { ...p, id: uid("sup") };
     const next = { ...data, supplierPurchases: [row, ...data.supplierPurchases] };
     isCloudConfigured ? withCloud("supplierPurchases", next, row) : persistLocal(next);
     showToast("Purchase recorded — finished stock updated.");
+  };
+  const updateSupplierPurchase = (id, patch) => {
+    const next = { ...data, supplierPurchases: data.supplierPurchases.map((p) => (p.id === id ? { ...p, ...patch } : p)) };
+    isCloudConfigured ? withCloudUpdate("supplierPurchases", next, id, patch) : persistLocal(next);
+    showToast("Purchase updated.");
   };
   const deleteSupplierPurchase = (id) => {
     const next = { ...data, supplierPurchases: data.supplierPurchases.filter((p) => p.id !== id) };
@@ -233,6 +287,11 @@ export default function App({ onLogout }) {
     isCloudConfigured ? withCloud("rawPurchases", next, row) : persistLocal(next);
     showToast("Raw purchase recorded — unmilled stock updated.");
   };
+  const updateRawPurchase = (id, patch) => {
+    const next = { ...data, rawPurchases: data.rawPurchases.map((p) => (p.id === id ? { ...p, ...patch } : p)) };
+    isCloudConfigured ? withCloudUpdate("rawPurchases", next, id, patch) : persistLocal(next);
+    showToast("Raw purchase updated.");
+  };
   const deleteRawPurchase = (id) => {
     const next = { ...data, rawPurchases: data.rawPurchases.filter((p) => p.id !== id) };
     isCloudConfigured ? withCloudDelete("rawPurchases", next, id) : persistLocal(next);
@@ -243,6 +302,11 @@ export default function App({ onLogout }) {
     const next = { ...data, millings: [row, ...data.millings] };
     isCloudConfigured ? withCloud("millings", next, row) : persistLocal(next);
     showToast("Milling recorded — finished stock updated.");
+  };
+  const updateMilling = (id, patch) => {
+    const next = { ...data, millings: data.millings.map((m) => (m.id === id ? { ...m, ...patch } : m)) };
+    isCloudConfigured ? withCloudUpdate("millings", next, id, patch) : persistLocal(next);
+    showToast("Milling entry updated.");
   };
   const deleteMilling = (id) => {
     const next = { ...data, millings: data.millings.filter((m) => m.id !== id) };
@@ -255,9 +319,41 @@ export default function App({ onLogout }) {
     isCloudConfigured ? withCloud("stockOuts", next, row) : persistLocal(next);
     showToast("Stock-out recorded.");
   };
+  const updateStockOut = (id, patch) => {
+    const next = { ...data, stockOuts: data.stockOuts.map((s) => (s.id === id ? { ...s, ...patch } : s)) };
+    isCloudConfigured ? withCloudUpdate("stockOuts", next, id, patch) : persistLocal(next);
+    showToast("Stock-out updated.");
+  };
   const deleteStockOut = (id) => {
     const next = { ...data, stockOuts: data.stockOuts.filter((s) => s.id !== id) };
     isCloudConfigured ? withCloudDelete("stockOuts", next, id) : persistLocal(next);
+  };
+
+  const addPayment = (p) => {
+    const row = { ...p, id: uid("pay") };
+    const next = { ...data, payments: [row, ...data.payments] };
+    isCloudConfigured ? withCloud("payments", next, row) : persistLocal(next);
+    showToast("Payment recorded.");
+  };
+  const deletePayment = (id) => {
+    const next = { ...data, payments: data.payments.filter((p) => p.id !== id) };
+    isCloudConfigured ? withCloudDelete("payments", next, id) : persistLocal(next);
+  };
+
+  const addExpense = (e) => {
+    const row = { ...e, id: uid("ex") };
+    const next = { ...data, expenses: [row, ...data.expenses] };
+    isCloudConfigured ? withCloud("expenses", next, row) : persistLocal(next);
+    showToast("Expense recorded.");
+  };
+  const updateExpense = (id, patch) => {
+    const next = { ...data, expenses: data.expenses.map((e) => (e.id === id ? { ...e, ...patch } : e)) };
+    isCloudConfigured ? withCloudUpdate("expenses", next, id, patch) : persistLocal(next);
+    showToast("Expense updated.");
+  };
+  const deleteExpense = (id) => {
+    const next = { ...data, expenses: data.expenses.filter((e) => e.id !== id) };
+    isCloudConfigured ? withCloudDelete("expenses", next, id) : persistLocal(next);
   };
 
   const riceTypeName = (id) => {
@@ -267,6 +363,10 @@ export default function App({ onLogout }) {
   const supplierName = (id) => {
     const sp = data.suppliers.find((s) => s.id === id);
     return sp ? sp.name : "—";
+  };
+  const buyerName = (id) => {
+    const b = data.buyers.find((b) => b.id === id);
+    return b ? b.name : null;
   };
 
   return (
@@ -296,19 +396,27 @@ export default function App({ onLogout }) {
           <SupplierPurchases
             data={data}
             addSupplierPurchase={addSupplierPurchase}
+            updateSupplierPurchase={updateSupplierPurchase}
             deleteSupplierPurchase={deleteSupplierPurchase}
             riceTypeName={riceTypeName}
             supplierName={supplierName}
           />
         )}
         {tab === "rawPurchases" && (
-          <RawPurchases data={data} rawPurchaseCostTotal={rawPurchaseCostTotal} addRawPurchase={addRawPurchase} deleteRawPurchase={deleteRawPurchase} />
+          <RawPurchases
+            data={data}
+            rawPurchaseCostTotal={rawPurchaseCostTotal}
+            addRawPurchase={addRawPurchase}
+            updateRawPurchase={updateRawPurchase}
+            deleteRawPurchase={deleteRawPurchase}
+          />
         )}
         {tab === "milling" && (
           <Milling
             data={data}
             rawStockKg={rawStockKg}
             addMilling={addMilling}
+            updateMilling={updateMilling}
             deleteMilling={deleteMilling}
             riceTypeName={riceTypeName}
           />
@@ -318,12 +426,39 @@ export default function App({ onLogout }) {
             data={data}
             stockByType={stockByType}
             addStockOut={addStockOut}
+            updateStockOut={updateStockOut}
             deleteStockOut={deleteStockOut}
             riceTypeName={riceTypeName}
+            buyerName={buyerName}
+          />
+        )}
+        {tab === "buyers" && (
+          <Buyers
+            data={data}
+            buyerBalances={buyerBalances}
+            addBuyer={addBuyer}
+            deleteBuyer={deleteBuyer}
+            addPayment={addPayment}
+            deletePayment={deletePayment}
+          />
+        )}
+        {tab === "expenses" && (
+          <Expenses
+            data={data}
+            totalExpenses={totalExpenses}
+            addExpense={addExpense}
+            updateExpense={updateExpense}
+            deleteExpense={deleteExpense}
           />
         )}
         {tab === "reports" && (
-          <Reports data={data} rawPurchaseCostTotal={rawPurchaseCostTotal} riceTypeName={riceTypeName} />
+          <Reports
+            data={data}
+            rawPurchaseCostTotal={rawPurchaseCostTotal}
+            totalExpenses={totalExpenses}
+            buyerBalances={buyerBalances}
+            riceTypeName={riceTypeName}
+          />
         )}
         {tab === "types" && (
           <RiceTypes data={data} addRiceType={addRiceType} deleteRiceType={deleteRiceType} />

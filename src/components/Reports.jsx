@@ -34,7 +34,7 @@ function byMonth(records, amountKey) {
   return Object.values(map).sort((a, b) => (a.key > b.key ? 1 : -1));
 }
 
-export default function Reports({ data, rawPurchaseCostTotal, riceTypeName }) {
+export default function Reports({ data, rawPurchaseCostTotal, totalExpenses, buyerBalances, riceTypeName }) {
   const sales = useMemo(() => data.stockOuts.filter((s) => s.reason === "Sale"), [data.stockOuts]);
 
   const totalGrossSales = useMemo(
@@ -47,7 +47,12 @@ export default function Reports({ data, rawPurchaseCostTotal, riceTypeName }) {
     [data.supplierPurchases]
   );
 
-  const totalCosts = rawPurchaseCostTotal + totalSupplierCost;
+  const totalOutstanding = useMemo(
+    () => data.buyers.reduce((sum, b) => sum + Math.max(0, buyerBalances[b.id] || 0), 0),
+    [data.buyers, buyerBalances]
+  );
+
+  const totalCosts = rawPurchaseCostTotal + totalSupplierCost + totalExpenses;
   const estimatedProfit = totalGrossSales - totalCosts;
 
   const salesByType = useMemo(() => {
@@ -63,19 +68,28 @@ export default function Reports({ data, rawPurchaseCostTotal, riceTypeName }) {
 
   const salesOverTime = useMemo(() => byMonth(sales, "totalAmount"), [sales]);
 
+  const expensesByCategory = useMemo(() => {
+    const map = {};
+    for (const e of data.expenses) {
+      map[e.category] = (map[e.category] || 0) + (e.amount || 0);
+    }
+    return Object.entries(map).map(([name, value]) => ({ name, value }));
+  }, [data.expenses]);
+
   const costBreakdown = [
     { name: "Raw palay (unmilled)", value: rawPurchaseCostTotal },
     { name: "Supplier purchases", value: totalSupplierCost },
+    ...expensesByCategory,
   ].filter((c) => c.value > 0);
 
-  const hasAnyData = sales.length > 0 || rawPurchaseCostTotal > 0 || totalSupplierCost > 0;
+  const hasAnyData = sales.length > 0 || rawPurchaseCostTotal > 0 || totalSupplierCost > 0 || totalExpenses > 0;
 
   if (!hasAnyData) {
     return (
       <EmptyState
         icon={BarChart3}
         title="Nothing to report yet"
-        body="Once you record sales and purchases, gross sales, costs, and estimated profit will show up here."
+        body="Once you record sales, purchases, and expenses, gross sales, costs, and estimated profit will show up here."
       />
     );
   }
@@ -84,8 +98,8 @@ export default function Reports({ data, rawPurchaseCostTotal, riceTypeName }) {
     <div>
       <div className="section-label">Business overview</div>
       <div className="hint-line">
-        Estimated profit = gross sales − (raw palay costs + supplier purchase costs). This is a
-        simplified estimate — it doesn't include milling labor, spoilage, or other overhead.
+        Estimated profit = gross sales − (raw palay costs + supplier purchase costs + other expenses).
+        This is a simplified estimate — it doesn't account for spoilage or unsold inventory value.
       </div>
 
       <div className="report-summary-row">
@@ -108,6 +122,12 @@ export default function Reports({ data, rawPurchaseCostTotal, riceTypeName }) {
             style={{ color: estimatedProfit >= 0 ? "var(--paddy)" : "var(--alert)" }}
           >
             ₱ {fmtNum(estimatedProfit)}
+          </div>
+        </div>
+        <div className="report-summary-card">
+          <div className="report-summary-label">Outstanding (utang)</div>
+          <div className="report-summary-value" style={{ color: totalOutstanding > 0 ? "var(--alert)" : "var(--husk)" }}>
+            ₱ {fmtNum(totalOutstanding)}
           </div>
         </div>
       </div>
