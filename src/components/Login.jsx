@@ -27,7 +27,7 @@ export default function Login() {
       <div className="brand" style={{ justifyContent: "center", marginBottom: 24 }}>
         <Wheat size={22} strokeWidth={1.75} />
         <div>
-          <div className="brand-title">Jessa's Rice Stock Ledger</div>
+          <div className="brand-title">MJRN Rice Stock Ledger</div>
           <div className="brand-sub">Sign in to continue</div>
         </div>
       </div>
