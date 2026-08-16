@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Package, Plus, Trash2 } from "lucide-react";
-import { todayStr, fmtDate, fmtNum } from "../lib/format.js";
+import { todayStr, fmtDate, fmtNum, kgPerUnit } from "../lib/format.js";
 import { EmptyState } from "./ui.jsx";
 
 export default function StockOuts({ data, stockByType, addStockOut, deleteStockOut, riceTypeName }) {
@@ -8,22 +8,42 @@ export default function StockOuts({ data, stockByType, addStockOut, deleteStockO
     date: todayStr(),
     riceTypeId: data.riceTypes[0]?.id || "",
     quantity: "",
+    quantityUnit: "native", // "native" = the rice type's own unit (e.g. sack), "kg" = kilograms
     reason: "Sale",
+    pricePerUnit: "",
     notes: "",
   });
   const disabled = data.riceTypes.length === 0;
+  const isSale = form.reason === "Sale";
+
+  const selectedType = data.riceTypes.find((rt) => rt.id === form.riceTypeId);
+  const factor = selectedType ? kgPerUnit(selectedType.unit) : 1;
+  // Whether this rice type's own unit is already kg — if so there's
+  // nothing to toggle, the quantity typed in is already the native unit.
+  const canToggleUnit = factor > 1;
+
+  const enteredQty = Number(form.quantity) || 0;
+  // Quantity converted into the rice type's native unit (sacks, etc.) —
+  // this is what actually gets stored/subtracted from stock, so every
+  // other part of the app keeps working in the unit it already expects.
+  const nativeQuantity = canToggleUnit && form.quantityUnit === "kg" ? enteredQty / factor : enteredQty;
+
+  const total = nativeQuantity * (Number(form.pricePerUnit) || 0);
 
   const submit = (e) => {
     e.preventDefault();
     if (!form.quantity || !form.riceTypeId) return;
+    if (isSale && !form.pricePerUnit) return;
     addStockOut({
       date: form.date,
       riceTypeId: form.riceTypeId,
-      quantity: Number(form.quantity),
+      quantity: nativeQuantity,
       reason: form.reason,
+      pricePerUnit: isSale ? Number(form.pricePerUnit) : 0,
+      totalAmount: isSale ? total : 0,
       notes: form.notes,
     });
-    setForm({ ...form, quantity: "", notes: "" });
+    setForm({ ...form, quantity: "", pricePerUnit: "", notes: "" });
   };
 
   return (
@@ -40,7 +60,7 @@ export default function StockOuts({ data, stockByType, addStockOut, deleteStockO
             </label>
             <label>
               Rice type
-              <select value={form.riceTypeId} onChange={(e) => setForm({ ...form, riceTypeId: e.target.value })}>
+              <select value={form.riceTypeId} onChange={(e) => setForm({ ...form, riceTypeId: e.target.value, quantityUnit: "native" })}>
                 {data.riceTypes.map((rt) => (
                   <option key={rt.id} value={rt.id}>
                     {rt.name} · {rt.grade} (on hand: {fmtNum(stockByType[rt.id] || 0)})
@@ -59,10 +79,38 @@ export default function StockOuts({ data, stockByType, addStockOut, deleteStockO
           </div>
           <div className="form-row">
             <label>
-              Quantity
+              Quantity {canToggleUnit ? `(${form.quantityUnit === "kg" ? "kg" : selectedType.unit})` : ""}
               <input type="number" min="0" step="0.01" placeholder="0" value={form.quantity}
                 onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
             </label>
+            {canToggleUnit && (
+              <label>
+                Quantity unit
+                <select value={form.quantityUnit} onChange={(e) => setForm({ ...form, quantityUnit: e.target.value })}>
+                  <option value="native">{selectedType.unit}</option>
+                  <option value="kg">Kilograms</option>
+                </select>
+              </label>
+            )}
+            {canToggleUnit && form.quantityUnit === "kg" && enteredQty > 0 && (
+              <label>
+                = {selectedType.unit}
+                <input type="text" value={fmtNum(nativeQuantity)} disabled />
+              </label>
+            )}
+            {isSale && (
+              <>
+                <label>
+                  Price per {canToggleUnit ? selectedType.unit : "unit"} (₱)
+                  <input type="number" min="0" step="0.01" placeholder="0.00" value={form.pricePerUnit}
+                    onChange={(e) => setForm({ ...form, pricePerUnit: e.target.value })} required />
+                </label>
+                <label>
+                  Total amount
+                  <input type="text" value={`₱ ${fmtNum(total)}`} disabled />
+                </label>
+              </>
+            )}
             <label className="full">
               Notes (optional)
               <input type="text" placeholder="e.g. buyer name" value={form.notes}
@@ -87,10 +135,12 @@ export default function StockOuts({ data, stockByType, addStockOut, deleteStockO
                 </div>
                 <div className="receipt-line2">
                   {fmtNum(s.quantity)} — {s.reason}
+                  {s.reason === "Sale" && s.pricePerUnit ? ` @ ₱${fmtNum(s.pricePerUnit)}` : ""}
                 </div>
                 {s.notes && <div className="receipt-notes">{s.notes}</div>}
               </div>
               <div className="receipt-right">
+                {s.reason === "Sale" && <div className="receipt-total">₱ {fmtNum(s.totalAmount)}</div>}
                 <button className="icon-btn" onClick={() => deleteStockOut(s.id)} title="Delete">
                   <Trash2 size={15} />
                 </button>

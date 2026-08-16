@@ -3,7 +3,7 @@ import { Wheat } from "lucide-react";
 import { fmtNum } from "../lib/format.js";
 import { SackGauge, StatusBadge, EmptyState } from "./ui.jsx";
 
-export default function Dashboard({ data, rawStockKg, stockByType, statusFor }) {
+export default function Dashboard({ data, rawStockKg, rawPurchaseCostTotal, stockByType, statusFor }) {
   return (
     <div>
       <div className="section-label">Raw stock (unmilled palay, awaiting milling)</div>
@@ -12,8 +12,13 @@ export default function Dashboard({ data, rawStockKg, stockByType, statusFor }) 
           <div className="stock-name">Palay / unmilled rice</div>
           <div className="stock-grade">Bought locally by weight</div>
         </div>
-        <div className="stock-qty">
-          {fmtNum(rawStockKg)} <span className="stock-unit">kg</span>
+        <div>
+          <div className="stock-qty" style={{ textAlign: "right" }}>
+            {fmtNum(rawStockKg)} <span className="stock-unit">kg</span>
+          </div>
+          <div className="muted" style={{ textAlign: "right" }}>
+            ₱ {fmtNum(rawPurchaseCostTotal)} spent to date
+          </div>
         </div>
       </div>
 

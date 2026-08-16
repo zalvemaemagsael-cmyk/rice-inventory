@@ -12,6 +12,7 @@ import Milling from "./components/Milling.jsx";
 import StockOuts from "./components/StockOuts.jsx";
 import RiceTypes from "./components/RiceTypes.jsx";
 import Suppliers from "./components/Suppliers.jsx";
+import Reports from "./components/Reports.jsx";
 
 export default function App({ onLogout }) {
   const [data, setData] = useState(null);
@@ -102,6 +103,14 @@ export default function App({ onLogout }) {
     const bought = data.rawPurchases.reduce((sum, p) => sum + p.quantityKg, 0);
     const milled = data.millings.reduce((sum, m) => sum + m.rawQuantityKg, 0);
     return bought - milled;
+  }, [data]);
+
+  // Running total of money spent buying raw palay — sums the totalCost of
+  // every raw purchase automatically, updating the moment a new one is
+  // recorded (no manual re-entry needed).
+  const rawPurchaseCostTotal = useMemo(() => {
+    if (!data) return 0;
+    return data.rawPurchases.reduce((sum, p) => sum + (p.totalCost || 0), 0);
   }, [data]);
 
   // Finished stock per rice type: two acquisition paths feed the same pool -
@@ -281,7 +290,7 @@ export default function App({ onLogout }) {
 
       <main className="rt-main">
         {tab === "dashboard" && (
-          <Dashboard data={data} rawStockKg={rawStockKg} stockByType={stockByType} statusFor={statusFor} />
+          <Dashboard data={data} rawStockKg={rawStockKg} rawPurchaseCostTotal={rawPurchaseCostTotal} stockByType={stockByType} statusFor={statusFor} />
         )}
         {tab === "supplierPurchases" && (
           <SupplierPurchases
@@ -293,7 +302,7 @@ export default function App({ onLogout }) {
           />
         )}
         {tab === "rawPurchases" && (
-          <RawPurchases data={data} addRawPurchase={addRawPurchase} deleteRawPurchase={deleteRawPurchase} />
+          <RawPurchases data={data} rawPurchaseCostTotal={rawPurchaseCostTotal} addRawPurchase={addRawPurchase} deleteRawPurchase={deleteRawPurchase} />
         )}
         {tab === "milling" && (
           <Milling
@@ -312,6 +321,9 @@ export default function App({ onLogout }) {
             deleteStockOut={deleteStockOut}
             riceTypeName={riceTypeName}
           />
+        )}
+        {tab === "reports" && (
+          <Reports data={data} rawPurchaseCostTotal={rawPurchaseCostTotal} riceTypeName={riceTypeName} />
         )}
         {tab === "types" && (
           <RiceTypes data={data} addRiceType={addRiceType} deleteRiceType={deleteRiceType} />
