@@ -7,7 +7,7 @@ export default function Header({ lowCount, onLogout }) {
       <div className="brand">
         <Wheat size={22} strokeWidth={1.75} />
         <div>
-          <div className="brand-title">Jessa's Rice Stock Ledger</div>
+          <div className="brand-title">MJRN Rice Stock Ledger</div>
           <div className="brand-sub">Raw stock, milling &amp; finished goods</div>
         </div>
       </div>
