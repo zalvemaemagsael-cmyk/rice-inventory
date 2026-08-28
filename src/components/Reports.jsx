@@ -34,7 +34,7 @@ function byMonth(records, amountKey) {
   return Object.values(map).sort((a, b) => (a.key > b.key ? 1 : -1));
 }
 
-export default function Reports({ data, rawPurchaseCostTotal, totalExpenses, buyerBalances, riceTypeName }) {
+export default function Reports({ data, rawPurchaseCostTotal, totalExpenses, totalHuskSales, buyerBalances, riceTypeName }) {
   const sales = useMemo(() => data.stockOuts.filter((s) => s.reason === "Sale"), [data.stockOuts]);
 
   const totalGrossSales = useMemo(
@@ -53,7 +53,8 @@ export default function Reports({ data, rawPurchaseCostTotal, totalExpenses, buy
   );
 
   const totalCosts = rawPurchaseCostTotal + totalSupplierCost + totalExpenses;
-  const estimatedProfit = totalGrossSales - totalCosts;
+  const totalRevenue = totalGrossSales + totalHuskSales;
+  const estimatedProfit = totalRevenue - totalCosts;
 
   const salesByType = useMemo(() => {
     const map = {};
@@ -61,10 +62,10 @@ export default function Reports({ data, rawPurchaseCostTotal, totalExpenses, buy
       const name = riceTypeName(s.riceTypeId);
       map[name] = (map[name] || 0) + (s.totalAmount || 0);
     }
-    return Object.entries(map)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [sales, riceTypeName]);
+    const entries = Object.entries(map).map(([name, value]) => ({ name, value }));
+    if (totalHuskSales > 0) entries.push({ name: "Rice husk/bran", value: totalHuskSales });
+    return entries.sort((a, b) => b.value - a.value);
+  }, [sales, riceTypeName, totalHuskSales]);
 
   const salesOverTime = useMemo(() => byMonth(sales, "totalAmount"), [sales]);
 
@@ -82,7 +83,7 @@ export default function Reports({ data, rawPurchaseCostTotal, totalExpenses, buy
     ...expensesByCategory,
   ].filter((c) => c.value > 0);
 
-  const hasAnyData = sales.length > 0 || rawPurchaseCostTotal > 0 || totalSupplierCost > 0 || totalExpenses > 0;
+  const hasAnyData = sales.length > 0 || rawPurchaseCostTotal > 0 || totalSupplierCost > 0 || totalExpenses > 0 || totalHuskSales > 0;
 
   if (!hasAnyData) {
     return (
@@ -98,7 +99,7 @@ export default function Reports({ data, rawPurchaseCostTotal, totalExpenses, buy
     <div>
       <div className="section-label">Business overview</div>
       <div className="hint-line">
-        Estimated profit = gross sales − (raw palay costs + supplier purchase costs + other expenses).
+        Estimated profit = gross sales (rice + husk/bran) − (raw palay costs + supplier purchase costs + other expenses).
         This is a simplified estimate — it doesn't account for spoilage or unsold inventory value.
       </div>
 
@@ -106,7 +107,7 @@ export default function Reports({ data, rawPurchaseCostTotal, totalExpenses, buy
         <div className="report-summary-card">
           <div className="report-summary-label">Gross sales</div>
           <div className="report-summary-value" style={{ color: "var(--paddy)" }}>
-            ₱ {fmtNum(totalGrossSales)}
+            ₱ {fmtNum(totalRevenue)}
           </div>
         </div>
         <div className="report-summary-card">
@@ -152,7 +153,7 @@ export default function Reports({ data, rawPurchaseCostTotal, totalExpenses, buy
       <div className="report-grid-2">
         {salesByType.length > 0 && (
           <div>
-            <div className="section-label" style={{ marginTop: 28 }}>Sales by rice type</div>
+            <div className="section-label" style={{ marginTop: 28 }}>Sales breakdown</div>
             <div className="report-chart-card">
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={salesByType} layout="vertical" margin={{ left: 20 }}>

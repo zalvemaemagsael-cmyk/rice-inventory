@@ -26,6 +26,7 @@ export const TABLES = {
   stockOuts: { table: "stock_outs", orderBy: "createdAt", ascending: false },
   payments: { table: "payments", orderBy: "createdAt", ascending: false },
   expenses: { table: "expenses", orderBy: "createdAt", ascending: false },
+  huskSales: { table: "husk_sales", orderBy: "createdAt", ascending: false },
 };
 
 // Loads every table and returns the same shaped object App.jsx already
@@ -75,7 +76,7 @@ export async function deleteRow(key, id) {
 // Order matters: tables referenced by others (riceTypes, suppliers,
 // buyers) must be inserted before the tables that reference them.
 export async function importAll(data) {
-  for (const key of ["riceTypes", "suppliers", "buyers", "supplierPurchases", "rawPurchases", "millings", "stockOuts", "payments", "expenses"]) {
+  for (const key of ["riceTypes", "suppliers", "buyers", "supplierPurchases", "rawPurchases", "millings", "stockOuts", "payments", "expenses", "huskSales"]) {
     const rows = data[key] || [];
     if (rows.length === 0) continue;
     const { table } = TABLES[key];

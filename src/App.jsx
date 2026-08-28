@@ -135,8 +135,23 @@ export default function App({ onLogout }) {
     return data.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
   }, [data]);
 
-  // Each buyer's running balance: their linked "Sale" stock-outs minus
-  // their recorded payments. Positive = they still owe you (utang).
+  // Rice husk/bran: the powdery byproduct of milling, tracked separately
+  // from finished rice since it isn't tied to a rice type.
+  const huskStockKg = useMemo(() => {
+    if (!data) return 0;
+    const produced = data.millings.reduce((sum, m) => sum + (m.huskQuantityKg || 0), 0);
+    const sold = data.huskSales.reduce((sum, h) => sum + (h.quantityKg || 0), 0);
+    return produced - sold;
+  }, [data]);
+
+  const totalHuskSales = useMemo(() => {
+    if (!data) return 0;
+    return data.huskSales.reduce((sum, h) => sum + (h.totalAmount || 0), 0);
+  }, [data]);
+
+  // Each buyer's running balance: their linked "Sale" stock-outs and husk
+  // sales minus their recorded payments. Positive = they still owe you
+  // (utang).
   const buyerBalances = useMemo(() => {
     if (!data) return {};
     const map = {};
@@ -145,6 +160,9 @@ export default function App({ onLogout }) {
       if (s.reason === "Sale" && s.buyerId) {
         map[s.buyerId] = (map[s.buyerId] || 0) + (s.totalAmount || 0);
       }
+    }
+    for (const h of data.huskSales) {
+      if (h.buyerId) map[h.buyerId] = (map[h.buyerId] || 0) + (h.totalAmount || 0);
     }
     for (const pay of data.payments) {
       if (pay.buyerId) map[pay.buyerId] = (map[pay.buyerId] || 0) - (pay.amount || 0);
@@ -313,6 +331,22 @@ export default function App({ onLogout }) {
     isCloudConfigured ? withCloudDelete("millings", next, id) : persistLocal(next);
   };
 
+  const addHuskSale = (h) => {
+    const row = { ...h, id: uid("hu") };
+    const next = { ...data, huskSales: [row, ...data.huskSales] };
+    isCloudConfigured ? withCloud("huskSales", next, row) : persistLocal(next);
+    showToast("Husk/bran sale recorded.");
+  };
+  const updateHuskSale = (id, patch) => {
+    const next = { ...data, huskSales: data.huskSales.map((h) => (h.id === id ? { ...h, ...patch } : h)) };
+    isCloudConfigured ? withCloudUpdate("huskSales", next, id, patch) : persistLocal(next);
+    showToast("Husk/bran sale updated.");
+  };
+  const deleteHuskSale = (id) => {
+    const next = { ...data, huskSales: data.huskSales.filter((h) => h.id !== id) };
+    isCloudConfigured ? withCloudDelete("huskSales", next, id) : persistLocal(next);
+  };
+
   const addStockOut = (s) => {
     const row = { ...s, id: uid("so") };
     const next = { ...data, stockOuts: [row, ...data.stockOuts] };
@@ -415,10 +449,15 @@ export default function App({ onLogout }) {
           <Milling
             data={data}
             rawStockKg={rawStockKg}
+            huskStockKg={huskStockKg}
             addMilling={addMilling}
             updateMilling={updateMilling}
             deleteMilling={deleteMilling}
+            addHuskSale={addHuskSale}
+            updateHuskSale={updateHuskSale}
+            deleteHuskSale={deleteHuskSale}
             riceTypeName={riceTypeName}
+            buyerName={buyerName}
           />
         )}
         {tab === "stockouts" && (
@@ -456,6 +495,7 @@ export default function App({ onLogout }) {
             data={data}
             rawPurchaseCostTotal={rawPurchaseCostTotal}
             totalExpenses={totalExpenses}
+            totalHuskSales={totalHuskSales}
             buyerBalances={buyerBalances}
             riceTypeName={riceTypeName}
           />
