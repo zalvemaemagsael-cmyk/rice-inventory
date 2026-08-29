@@ -498,6 +498,8 @@ export default function App({ onLogout }) {
             totalHuskSales={totalHuskSales}
             buyerBalances={buyerBalances}
             riceTypeName={riceTypeName}
+            supplierName={supplierName}
+            buyerName={buyerName}
           />
         )}
         {tab === "types" && (
