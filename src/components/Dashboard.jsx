@@ -1,26 +1,22 @@
 import React from "react";
 import { Wheat } from "lucide-react";
 import { fmtNum } from "../lib/format.js";
-import { SackGauge, StatusBadge, EmptyState } from "./ui.jsx";
+import { SackGauge, StatusBadge, EmptyState, KpiCard } from "./ui.jsx";
+
+const RAW_STOCK_TARGET_KG = 6000;
 
 export default function Dashboard({ data, rawStockKg, rawPurchaseCostTotal, stockByType, statusFor }) {
   return (
     <div>
       <div className="section-label">Raw stock (unmilled palay, awaiting milling)</div>
-      <div className="raw-card">
-        <div>
-          <div className="stock-name">Palay / unmilled rice</div>
-          <div className="stock-grade">Bought locally by weight</div>
-        </div>
-        <div>
-          <div className="stock-qty" style={{ textAlign: "right" }}>
-            {fmtNum(rawStockKg)} <span className="stock-unit">kg</span>
-          </div>
-          <div className="muted" style={{ textAlign: "right" }}>
-            ₱ {fmtNum(rawPurchaseCostTotal)} spent to date
-          </div>
-        </div>
-      </div>
+      <KpiCard
+        label="Palay / unmilled rice"
+        sublabel="Bought locally by weight"
+        value={rawStockKg}
+        unit="kg"
+        target={RAW_STOCK_TARGET_KG}
+        footer={`₱ ${fmtNum(rawPurchaseCostTotal)} spent to date`}
+      />
 
       <div className="section-label" style={{ marginTop: 24 }}>Finished stock by type</div>
       <div className="hint-line">Filled by supplier purchases and milling runs; drawn down by stock-outs.</div>

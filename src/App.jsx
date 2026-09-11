@@ -439,6 +439,7 @@ export default function App({ onLogout }) {
         {tab === "rawPurchases" && (
           <RawPurchases
             data={data}
+            rawStockKg={rawStockKg}
             rawPurchaseCostTotal={rawPurchaseCostTotal}
             addRawPurchase={addRawPurchase}
             updateRawPurchase={updateRawPurchase}

@@ -81,6 +81,11 @@ body {
 .gauge-track { height: 9px; background: repeating-linear-gradient(135deg, #EAE1CB, #EAE1CB 3px, #E2D7BC 3px, #E2D7BC 6px); border-radius: 5px; overflow: hidden; border: 1px solid var(--hairline); }
 .gauge-fill { height: 100%; border-radius: 5px 0 0 5px; transition: width 0.3s ease; }
 
+.kpi-card { background: var(--card); border: 1px solid var(--hairline); border-radius: 10px; padding: 16px 18px; margin-bottom: 20px; max-width: 420px; }
+.kpi-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+.kpi-pct { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 600; }
+.kpi-target-row { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--husk); margin-top: 6px; }
+
 .badge { font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: 20px; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.03em; }
 .badge-good { background: #E4EADE; color: var(--paddy); }
 .badge-low { background: #F1E4CC; color: var(--husk); }

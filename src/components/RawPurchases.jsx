@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { Sprout, Plus, Trash2, Pencil, X } from "lucide-react";
 import { todayStr, fmtDate, fmtNum, travelFeeFor } from "../lib/format.js";
-import { EmptyState } from "./ui.jsx";
+import { EmptyState, KpiCard } from "./ui.jsx";
 
-export default function RawPurchases({ data, rawPurchaseCostTotal, addRawPurchase, updateRawPurchase, deleteRawPurchase }) {
+const RAW_STOCK_TARGET_KG = 6000;
+
+export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, addRawPurchase, updateRawPurchase, deleteRawPurchase }) {
   const blankForm = {
     date: todayStr(),
     source: "",
@@ -64,6 +66,14 @@ export default function RawPurchases({ data, rawPurchaseCostTotal, addRawPurchas
 
   return (
     <div>
+      <KpiCard
+        label="Palay / unmilled rice"
+        sublabel="Current unmilled stock"
+        value={rawStockKg}
+        unit="kg"
+        target={RAW_STOCK_TARGET_KG}
+        footer={`₱ ${fmtNum(rawPurchaseCostTotal)} spent to date`}
+      />
       <div className="section-label">{editingId ? "Edit raw purchase" : "Buy unmilled palay locally (by weight)"}</div>
       <div className="hint-line">Weights vary by delivery - enter each one as it's bought, then mill it in the Milling tab.</div>
       <form className="form-card" onSubmit={submit}>

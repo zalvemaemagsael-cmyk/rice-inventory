@@ -283,8 +283,11 @@ export default function Reports({ data, rawPurchaseCostTotal, totalExpenses, tot
               <tr>
                 <th>Date</th>
                 <th>Type</th>
+                <th style={{ textAlign: "right" }}>Quantity</th>
+                <th>Unit</th>
                 <th>Description</th>
                 <th style={{ textAlign: "right" }}>Amount</th>
+                <th>Direction</th>
               </tr>
             </thead>
             <tbody>
@@ -292,9 +295,14 @@ export default function Reports({ data, rawPurchaseCostTotal, totalExpenses, tot
                 <tr key={`${r.category}-${r.id}`}>
                   <td className="txn-date">{fmtDate(r.date)}</td>
                   <td>{r.type}</td>
+                  <td style={{ textAlign: "right" }}>{r.quantity != null ? fmtNum(r.quantity) : "—"}</td>
+                  <td>{r.unit || "—"}</td>
                   <td>{r.description}</td>
                   <td className={`txn-amount ${r.direction}`}>
-                    {r.amount != null ? `${r.direction === "out" ? "−" : "+"}₱ ${fmtNum(r.amount)}` : "—"}
+                    {r.amount != null ? `₱ ${fmtNum(r.amount)}` : "—"}
+                  </td>
+                  <td className={`txn-amount ${r.direction}`}>
+                    {r.direction === "in" ? "In" : r.direction === "out" ? "Out" : "—"}
                   </td>
                 </tr>
               ))}

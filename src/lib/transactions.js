@@ -13,11 +13,14 @@ export const TXN_CATEGORIES = [
 ];
 
 // Normalizes every transaction-bearing table into one flat list of rows
-// shaped { id, date, category, type, description, amount, direction },
-// sorted most-recent first. `amount` is null for entries with no direct
-// cash value (e.g. a milling conversion or a non-sale stock-out).
+// shaped { id, date, category, type, quantity, unit, description, amount,
+// direction }, sorted most-recent first. `amount` is null for entries
+// with no direct cash value (e.g. a milling conversion or a non-sale
+// stock-out). `quantity`/`unit` are null/"" where a single quantity
+// doesn't apply (e.g. an expense).
 export function buildTransactionRows(data, riceTypeName, supplierName, buyerName) {
   const rows = [];
+  const riceTypeUnit = (id) => data.riceTypes.find((rt) => rt.id === id)?.unit || "";
 
   for (const p of data.supplierPurchases) {
     rows.push({
@@ -25,7 +28,9 @@ export function buildTransactionRows(data, riceTypeName, supplierName, buyerName
       date: p.date,
       category: "supplierPurchase",
       type: "Supplier Purchase",
-      description: `${fmtNum(p.quantity)} ${riceTypeName(p.riceTypeId)} from ${supplierName(p.supplierId)}`,
+      quantity: p.quantity,
+      unit: riceTypeUnit(p.riceTypeId),
+      description: `${riceTypeName(p.riceTypeId)} from ${supplierName(p.supplierId)}`,
       amount: p.totalCost || 0,
       direction: "out",
     });
@@ -37,7 +42,9 @@ export function buildTransactionRows(data, riceTypeName, supplierName, buyerName
       date: p.date,
       category: "rawPurchase",
       type: "Raw Rice Purchase",
-      description: `${fmtNum(p.quantityKg)} kg palay from ${p.source}`,
+      quantity: p.quantityKg,
+      unit: "kg",
+      description: `Palay from ${p.source}`,
       amount: p.totalCost || 0,
       direction: "out",
     });
@@ -49,8 +56,10 @@ export function buildTransactionRows(data, riceTypeName, supplierName, buyerName
       date: m.date,
       category: "milling",
       type: "Milling",
-      description: `${fmtNum(m.rawQuantityKg)} kg raw → ${fmtNum(m.outputQuantity)} ${riceTypeName(m.riceTypeId)}` +
-        (m.huskQuantityKg ? ` + ${fmtNum(m.huskQuantityKg)} kg husk` : ""),
+      quantity: m.outputQuantity,
+      unit: riceTypeUnit(m.riceTypeId),
+      description: `${riceTypeName(m.riceTypeId)} — used ${fmtNum(m.rawQuantityKg)} kg raw` +
+        (m.huskQuantityKg ? `, +${fmtNum(m.huskQuantityKg)} kg husk` : ""),
       amount: null,
       direction: "—",
     });
@@ -63,7 +72,9 @@ export function buildTransactionRows(data, riceTypeName, supplierName, buyerName
       date: h.date,
       category: "huskSale",
       type: "Husk/Bran Sold",
-      description: `${fmtNum(h.quantityKg)} kg${buyer ? ` to ${buyer}` : ""}`,
+      quantity: h.quantityKg,
+      unit: "kg",
+      description: buyer ? `Sold to ${buyer}` : "Cash sale",
       amount: h.totalAmount || 0,
       direction: "in",
     });
@@ -76,7 +87,9 @@ export function buildTransactionRows(data, riceTypeName, supplierName, buyerName
       date: s.date,
       category: "stockOut",
       type: `Stock Out (${s.reason})`,
-      description: `${fmtNum(s.quantity)} ${riceTypeName(s.riceTypeId)}${buyer ? ` to ${buyer}` : ""}`,
+      quantity: s.quantity,
+      unit: riceTypeUnit(s.riceTypeId),
+      description: `${riceTypeName(s.riceTypeId)}${buyer ? ` — ${buyer}` : ""}`,
       amount: s.reason === "Sale" ? s.totalAmount || 0 : null,
       direction: s.reason === "Sale" ? "in" : "—",
     });
@@ -88,6 +101,8 @@ export function buildTransactionRows(data, riceTypeName, supplierName, buyerName
       date: e.date,
       category: "expense",
       type: "Expense",
+      quantity: null,
+      unit: "",
       description: e.category + (e.notes ? ` — ${e.notes}` : ""),
       amount: e.amount || 0,
       direction: "out",
@@ -104,13 +119,15 @@ function csvEscape(value) {
 
 // Triggers a browser download of the given rows as a CSV file.
 export function downloadTransactionsCSV(rows, filename) {
-  const header = ["Date", "Type", "Description", "Amount (PHP)", "Direction"];
+  const header = ["Date", "Type", "Quantity", "Unit", "Description", "Amount (PHP)", "Direction"];
   const lines = [header.join(",")];
   for (const r of rows) {
     lines.push(
       [
         r.date,
         r.type,
+        r.quantity != null ? r.quantity : "",
+        r.unit || "",
         r.description,
         r.amount != null ? r.amount : "",
         r.direction === "in" ? "In" : r.direction === "out" ? "Out" : "",
