@@ -107,13 +107,36 @@ export default function App({ onLogout }) {
     return bought - milled;
   }, [data]);
 
-  // Running total of money spent buying raw palay — sums the totalCost of
-  // every raw purchase automatically, updating the moment a new one is
-  // recorded (no manual re-entry needed).
-  const rawPurchaseCostTotal = useMemo(() => {
+  // Weighted-average cost per kg across every raw palay purchase ever made
+  // (total money spent ÷ total kg bought). Used to split that spending
+  // between "still sitting as unmilled stock" and "already turned into
+  // rice" whenever some of it gets milled.
+  const totalRawKgPurchased = useMemo(() => {
+    if (!data) return 0;
+    return data.rawPurchases.reduce((sum, p) => sum + (p.quantityKg || 0), 0);
+  }, [data]);
+  const totalRawSpendAllTime = useMemo(() => {
     if (!data) return 0;
     return data.rawPurchases.reduce((sum, p) => sum + (p.totalCost || 0), 0);
   }, [data]);
+  const avgRawCostPerKg = totalRawKgPurchased > 0 ? totalRawSpendAllTime / totalRawKgPurchased : 0;
+
+  // Cost still tied up in palay that hasn't been milled yet — this is
+  // what shows on the Raw Rice tab. It automatically drops toward ₱0 as
+  // that stock gets milled, since the cost has effectively moved into
+  // producing rice rather than sitting as unconverted raw material.
+  const rawPurchaseCostTotal = avgRawCostPerKg * rawStockKg;
+
+  // Cost of palay actually milled to date, at the same weighted-average
+  // rate — this is the amount that "left" the raw-purchase total above.
+  // The Reports tab counts this (not the original purchase price) as the
+  // recognized cost, since that's when the raw material actually turned
+  // into something sellable.
+  const kgMilledToDate = useMemo(() => {
+    if (!data) return 0;
+    return data.millings.reduce((sum, m) => sum + (m.rawQuantityKg || 0), 0);
+  }, [data]);
+  const costOfMilledPalay = avgRawCostPerKg * kgMilledToDate;
 
   // Finished stock per rice type: two acquisition paths feed the same pool -
   // buying already-milled rice from suppliers, and milling your own palay.
@@ -441,6 +464,7 @@ export default function App({ onLogout }) {
             data={data}
             rawStockKg={rawStockKg}
             rawPurchaseCostTotal={rawPurchaseCostTotal}
+            totalRawSpendAllTime={totalRawSpendAllTime}
             addRawPurchase={addRawPurchase}
             updateRawPurchase={updateRawPurchase}
             deleteRawPurchase={deleteRawPurchase}
@@ -494,7 +518,7 @@ export default function App({ onLogout }) {
         {tab === "reports" && (
           <Reports
             data={data}
-            rawPurchaseCostTotal={rawPurchaseCostTotal}
+            costOfMilledPalay={costOfMilledPalay}
             totalExpenses={totalExpenses}
             totalHuskSales={totalHuskSales}
             buyerBalances={buyerBalances}

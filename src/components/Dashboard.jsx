@@ -15,7 +15,7 @@ export default function Dashboard({ data, rawStockKg, rawPurchaseCostTotal, stoc
         value={rawStockKg}
         unit="kg"
         target={RAW_STOCK_TARGET_KG}
-        footer={`₱ ${fmtNum(rawPurchaseCostTotal)} spent to date`}
+        footer={`₱ ${fmtNum(rawPurchaseCostTotal)} tied up in stock on hand`}
       />
 
       <div className="section-label" style={{ marginTop: 24 }}>Finished stock by type</div>

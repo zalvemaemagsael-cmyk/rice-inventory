@@ -5,7 +5,7 @@ import { EmptyState, KpiCard } from "./ui.jsx";
 
 const RAW_STOCK_TARGET_KG = 6000;
 
-export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, addRawPurchase, updateRawPurchase, deleteRawPurchase }) {
+export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, totalRawSpendAllTime, addRawPurchase, updateRawPurchase, deleteRawPurchase }) {
   const blankForm = {
     date: todayStr(),
     source: "",
@@ -72,7 +72,7 @@ export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, a
         value={rawStockKg}
         unit="kg"
         target={RAW_STOCK_TARGET_KG}
-        footer={`₱ ${fmtNum(rawPurchaseCostTotal)} spent to date`}
+        footer={`₱ ${fmtNum(rawPurchaseCostTotal)} tied up in stock on hand`}
       />
       <div className="section-label">{editingId ? "Edit raw purchase" : "Buy unmilled palay locally (by weight)"}</div>
       <div className="hint-line">Weights vary by delivery - enter each one as it's bought, then mill it in the Milling tab.</div>
@@ -141,7 +141,12 @@ export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, a
 
       <div className="section-label" style={{ marginTop: 28, display: "flex", justifyContent: "space-between" }}>
         <span>Raw purchase log</span>
-        <span className="muted">Total spent: ₱ {fmtNum(rawPurchaseCostTotal)}</span>
+        <span className="muted">Cost of stock on hand: ₱ {fmtNum(rawPurchaseCostTotal)}</span>
+      </div>
+      <div className="hint-line" style={{ marginTop: -8 }}>
+        This drops toward ₱0 as stock gets milled — once it's converted, that cost counts toward
+        production instead (see the Reports tab), rather than staying counted as unspent raw stock.
+        Lifetime total spent on palay, for reference only: <strong>₱ {fmtNum(totalRawSpendAllTime)}</strong>.
       </div>
       {data.rawPurchases.length === 0 ? (
         <EmptyState icon={Sprout} title="No raw purchases yet" body="Unmilled palay bought by weight will appear here." />
