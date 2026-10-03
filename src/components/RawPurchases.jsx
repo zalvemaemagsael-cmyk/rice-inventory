@@ -125,7 +125,9 @@ export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, t
           </label>
         </div>
         <div className="hint-line">
-          Travel fee is automatic: ₱10 for 40kg or more, ₱7 for 30-39kg, ₱5 below that.
+          Travel fee is automatic and scales with weight: every full 40kg costs ₱10, and any
+          leftover amount is ₱7 (30-39kg) or ₱5 (under 30kg) — so larger purchases correctly add up
+          to more than one load's worth of travel fee.
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button type="submit" className="btn-primary">
