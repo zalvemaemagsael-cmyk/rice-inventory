@@ -66,6 +66,7 @@ body {
 .txn-amount { font-family: 'JetBrains Mono', monospace; text-align: right; white-space: nowrap; }
 .txn-amount.in { color: var(--paddy); }
 .txn-amount.out { color: var(--alert); }
+.txn-amount.moved { color: var(--husk); }
 
 .raw-card { display: flex; align-items: center; justify-content: space-between; background: var(--card); border: 1px solid var(--hairline); border-radius: 10px; padding: 14px 18px; }
 

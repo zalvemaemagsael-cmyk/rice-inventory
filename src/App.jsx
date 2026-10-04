@@ -3,6 +3,7 @@ import { emptyData } from "./data/emptyData.js";
 import { loadData as loadLocalData, saveData as saveLocalData } from "./lib/storage.js";
 import { isCloudConfigured, loadAll, isCloudEmpty, insertRow, updateRow, deleteRow, importAll, subscribeToChanges } from "./lib/db.js";
 import { uid } from "./lib/format.js";
+import { computeMillingCostLedger } from "./lib/costing.js";
 import Header from "./components/Header.jsx";
 import TabNav from "./components/TabNav.jsx";
 import Dashboard from "./components/Dashboard.jsx";
@@ -107,36 +108,49 @@ export default function App({ onLogout }) {
     return bought - milled;
   }, [data]);
 
-  // Weighted-average cost per kg across every raw palay purchase ever made
-  // (total money spent ÷ total kg bought). Used to split that spending
-  // between "still sitting as unmilled stock" and "already turned into
-  // rice" whenever some of it gets milled.
-  const totalRawKgPurchased = useMemo(() => {
-    if (!data) return 0;
-    return data.rawPurchases.reduce((sum, p) => sum + (p.quantityKg || 0), 0);
-  }, [data]);
+  // Lifetime reference total — every peso ever spent buying palay, never
+  // reset. Shown on the Raw Rice tab purely as a reference figure; it does
+  // not feed into any cost/profit calculation below.
   const totalRawSpendAllTime = useMemo(() => {
     if (!data) return 0;
     return data.rawPurchases.reduce((sum, p) => sum + (p.totalCost || 0), 0);
   }, [data]);
-  const avgRawCostPerKg = totalRawKgPurchased > 0 ? totalRawSpendAllTime / totalRawKgPurchased : 0;
+
+  // The actual cost ledger: walks every purchase and milling in the order
+  // they happened, moving cost out of "unmilled stock" and into a
+  // permanent per-milling history record as each batch gets milled. See
+  // lib/costing.js for why this is more correct than a simple average.
+  const millingLedger = useMemo(() => {
+    if (!data) return { remainingKg: 0, remainingValue: 0, millingCostRecords: [] };
+    return computeMillingCostLedger(data.rawPurchases, data.millings);
+  }, [data]);
 
   // Cost still tied up in palay that hasn't been milled yet — this is
   // what shows on the Raw Rice tab. It automatically drops toward ₱0 as
-  // that stock gets milled, since the cost has effectively moved into
-  // producing rice rather than sitting as unconverted raw material.
-  const rawPurchaseCostTotal = avgRawCostPerKg * rawStockKg;
+  // that stock gets milled, since the cost has moved into producing rice
+  // rather than sitting as unconverted raw material.
+  const rawPurchaseCostTotal = millingLedger.remainingValue;
 
-  // Cost of palay actually milled to date, at the same weighted-average
-  // rate — this is the amount that "left" the raw-purchase total above.
-  // The Reports tab counts this (not the original purchase price) as the
-  // recognized cost, since that's when the raw material actually turned
-  // into something sellable.
-  const kgMilledToDate = useMemo(() => {
-    if (!data) return 0;
-    return data.millings.reduce((sum, m) => sum + (m.rawQuantityKg || 0), 0);
-  }, [data]);
-  const costOfMilledPalay = avgRawCostPerKg * kgMilledToDate;
+  // Cost of palay actually milled to date — the sum of every permanent
+  // per-milling deduction recorded in the ledger. The Reports tab counts
+  // this (not the original purchase price) as the recognized cost, since
+  // that's when the raw material actually turned into something sellable.
+  const costOfMilledPalay = useMemo(
+    () => millingLedger.millingCostRecords.reduce((sum, r) => sum + r.costSubtracted, 0),
+    [millingLedger]
+  );
+
+  // Per-milling-run cost history, enriched with the rice type name, for
+  // the Reports tab's "where did the cost go" audit table. Looks the rice
+  // type up directly (rather than via the riceTypeName() helper declared
+  // further below) since this hook must run before that helper exists.
+  const millingCostHistory = useMemo(() => {
+    if (!data) return [];
+    return millingLedger.millingCostRecords.map((r) => {
+      const rt = data.riceTypes.find((t) => t.id === r.riceTypeId);
+      return { ...r, riceTypeLabel: rt ? `${rt.name} · ${rt.grade}` : "—" };
+    });
+  }, [data, millingLedger]);
 
   // Finished stock per rice type: two acquisition paths feed the same pool -
   // buying already-milled rice from suppliers, and milling your own palay.
@@ -519,6 +533,7 @@ export default function App({ onLogout }) {
           <Reports
             data={data}
             costOfMilledPalay={costOfMilledPalay}
+            millingCostHistory={millingCostHistory}
             totalExpenses={totalExpenses}
             totalHuskSales={totalHuskSales}
             buyerBalances={buyerBalances}

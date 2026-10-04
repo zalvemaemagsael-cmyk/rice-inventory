@@ -35,7 +35,7 @@ function byMonth(records, amountKey) {
   return Object.values(map).sort((a, b) => (a.key > b.key ? 1 : -1));
 }
 
-export default function Reports({ data, costOfMilledPalay, totalExpenses, totalHuskSales, buyerBalances, riceTypeName, supplierName, buyerName }) {
+export default function Reports({ data, costOfMilledPalay, millingCostHistory, totalExpenses, totalHuskSales, buyerBalances, riceTypeName, supplierName, buyerName }) {
   const sales = useMemo(() => data.stockOuts.filter((s) => s.reason === "Sale"), [data.stockOuts]);
 
   const totalGrossSales = useMemo(
@@ -244,6 +244,43 @@ export default function Reports({ data, costOfMilledPalay, totalExpenses, totalH
         </div>
       )}
 
+      <div className="section-label" style={{ marginTop: 32 }}>Milling cost history</div>
+      <div className="hint-line">
+        One row per milling run, showing exactly how much of the palay cost was permanently moved out
+        of "stock on hand" and counted toward production. These numbers never change retroactively —
+        a later purchase won't alter what an older milling run cost.
+      </div>
+      {millingCostHistory.length === 0 ? (
+        <EmptyState icon={BarChart3} title="No milling runs yet" body="Cost deductions will appear here once palay gets milled." />
+      ) : (
+        <div className="txn-table-wrap" style={{ marginBottom: 20 }}>
+          <table className="txn-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Rice Type</th>
+                <th style={{ textAlign: "right" }}>Raw kg milled</th>
+                <th style={{ textAlign: "right" }}>Output</th>
+                <th style={{ textAlign: "right" }}>Cost per kg (at the time)</th>
+                <th style={{ textAlign: "right" }}>Cost subtracted</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...millingCostHistory].reverse().map((r) => (
+                <tr key={r.id}>
+                  <td className="txn-date">{fmtDate(r.date)}</td>
+                  <td>{r.riceTypeLabel}</td>
+                  <td style={{ textAlign: "right" }}>{fmtNum(r.rawQuantityKg)}</td>
+                  <td style={{ textAlign: "right" }}>{fmtNum(r.outputQuantity)}</td>
+                  <td style={{ textAlign: "right" }}>₱ {fmtNum(r.costPerKgAtTime)}</td>
+                  <td className="txn-amount out">₱ {fmtNum(r.costSubtracted)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="section-label" style={{ marginTop: 32 }}>Transaction history</div>
       <div className="hint-line">
         Every supplier purchase, raw rice purchase, milling run, husk/bran sale, stock-out, and
@@ -304,7 +341,7 @@ export default function Reports({ data, costOfMilledPalay, totalExpenses, totalH
                     {r.amount != null ? `₱ ${fmtNum(r.amount)}` : "—"}
                   </td>
                   <td className={`txn-amount ${r.direction}`}>
-                    {r.direction === "in" ? "In" : r.direction === "out" ? "Out" : "—"}
+                    {r.direction === "in" ? "In" : r.direction === "out" ? "Out" : r.direction === "moved" ? "Moved" : "—"}
                   </td>
                 </tr>
               ))}
