@@ -30,7 +30,7 @@ function byMonth(records, amountKey) {
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const label = d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
     if (!map[key]) map[key] = { key, label, value: 0 };
-    map[key].value += r[amountKey] || 0;
+    map[key].value += Number(r[amountKey]) || 0;
   }
   return Object.values(map).sort((a, b) => (a.key > b.key ? 1 : -1));
 }
@@ -39,12 +39,12 @@ export default function Reports({ data, costOfMilledPalay, millingCostHistory, t
   const sales = useMemo(() => data.stockOuts.filter((s) => s.reason === "Sale"), [data.stockOuts]);
 
   const totalGrossSales = useMemo(
-    () => sales.reduce((sum, s) => sum + (s.totalAmount || 0), 0),
+    () => sales.reduce((sum, s) => sum + (Number(s.totalAmount) || 0), 0),
     [sales]
   );
 
   const totalSupplierCost = useMemo(
-    () => data.supplierPurchases.reduce((sum, p) => sum + (p.totalCost || 0), 0),
+    () => data.supplierPurchases.reduce((sum, p) => sum + (Number(p.totalCost) || 0), 0),
     [data.supplierPurchases]
   );
 
@@ -61,7 +61,7 @@ export default function Reports({ data, costOfMilledPalay, millingCostHistory, t
     const map = {};
     for (const s of sales) {
       const name = riceTypeName(s.riceTypeId);
-      map[name] = (map[name] || 0) + (s.totalAmount || 0);
+      map[name] = (map[name] || 0) + (Number(s.totalAmount) || 0);
     }
     const entries = Object.entries(map).map(([name, value]) => ({ name, value }));
     if (totalHuskSales > 0) entries.push({ name: "Rice husk/bran", value: totalHuskSales });
@@ -73,7 +73,7 @@ export default function Reports({ data, costOfMilledPalay, millingCostHistory, t
   const expensesByCategory = useMemo(() => {
     const map = {};
     for (const e of data.expenses) {
-      map[e.category] = (map[e.category] || 0) + (e.amount || 0);
+      map[e.category] = (map[e.category] || 0) + (Number(e.amount) || 0);
     }
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [data.expenses]);

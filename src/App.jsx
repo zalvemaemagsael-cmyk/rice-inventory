@@ -103,8 +103,8 @@ export default function App({ onLogout }) {
   // early return above them.
   const rawStockKg = useMemo(() => {
     if (!data) return 0;
-    const bought = data.rawPurchases.reduce((sum, p) => sum + p.quantityKg, 0);
-    const milled = data.millings.reduce((sum, m) => sum + m.rawQuantityKg, 0);
+    const bought = data.rawPurchases.reduce((sum, p) => sum + (Number(p.quantityKg) || 0), 0);
+    const milled = data.millings.reduce((sum, m) => sum + (Number(m.rawQuantityKg) || 0), 0);
     return bought - milled;
   }, [data]);
 
@@ -113,7 +113,7 @@ export default function App({ onLogout }) {
   // not feed into any cost/profit calculation below.
   const totalRawSpendAllTime = useMemo(() => {
     if (!data) return 0;
-    return data.rawPurchases.reduce((sum, p) => sum + (p.totalCost || 0), 0);
+    return data.rawPurchases.reduce((sum, p) => sum + (Number(p.totalCost) || 0), 0);
   }, [data]);
 
   // The actual cost ledger: walks every purchase and milling in the order
@@ -136,7 +136,7 @@ export default function App({ onLogout }) {
   // this (not the original purchase price) as the recognized cost, since
   // that's when the raw material actually turned into something sellable.
   const costOfMilledPalay = useMemo(
-    () => millingLedger.millingCostRecords.reduce((sum, r) => sum + r.costSubtracted, 0),
+    () => millingLedger.millingCostRecords.reduce((sum, r) => sum + (Number(r.costSubtracted) || 0), 0),
     [millingLedger]
   );
 
@@ -159,9 +159,9 @@ export default function App({ onLogout }) {
     if (!data) return {};
     const map = {};
     for (const rt of data.riceTypes) map[rt.id] = 0;
-    for (const p of data.supplierPurchases) map[p.riceTypeId] = (map[p.riceTypeId] || 0) + p.quantity;
-    for (const m of data.millings) map[m.riceTypeId] = (map[m.riceTypeId] || 0) + m.outputQuantity;
-    for (const s of data.stockOuts) map[s.riceTypeId] = (map[s.riceTypeId] || 0) - s.quantity;
+    for (const p of data.supplierPurchases) map[p.riceTypeId] = (map[p.riceTypeId] || 0) + (Number(p.quantity) || 0);
+    for (const m of data.millings) map[m.riceTypeId] = (map[m.riceTypeId] || 0) + (Number(m.outputQuantity) || 0);
+    for (const s of data.stockOuts) map[s.riceTypeId] = (map[s.riceTypeId] || 0) - (Number(s.quantity) || 0);
     return map;
   }, [data]);
 
@@ -169,21 +169,21 @@ export default function App({ onLogout }) {
   // feeds into the Reports tab's cost/profit figures.
   const totalExpenses = useMemo(() => {
     if (!data) return 0;
-    return data.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    return data.expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   }, [data]);
 
   // Rice husk/bran: the powdery byproduct of milling, tracked separately
   // from finished rice since it isn't tied to a rice type.
   const huskStockKg = useMemo(() => {
     if (!data) return 0;
-    const produced = data.millings.reduce((sum, m) => sum + (m.huskQuantityKg || 0), 0);
-    const sold = data.huskSales.reduce((sum, h) => sum + (h.quantityKg || 0), 0);
+    const produced = data.millings.reduce((sum, m) => sum + (Number(m.huskQuantityKg) || 0), 0);
+    const sold = data.huskSales.reduce((sum, h) => sum + (Number(h.quantityKg) || 0), 0);
     return produced - sold;
   }, [data]);
 
   const totalHuskSales = useMemo(() => {
     if (!data) return 0;
-    return data.huskSales.reduce((sum, h) => sum + (h.totalAmount || 0), 0);
+    return data.huskSales.reduce((sum, h) => sum + (Number(h.totalAmount) || 0), 0);
   }, [data]);
 
   // Each buyer's running balance: their linked "Sale" stock-outs and husk
@@ -195,14 +195,14 @@ export default function App({ onLogout }) {
     for (const b of data.buyers) map[b.id] = 0;
     for (const s of data.stockOuts) {
       if (s.reason === "Sale" && s.buyerId) {
-        map[s.buyerId] = (map[s.buyerId] || 0) + (s.totalAmount || 0);
+        map[s.buyerId] = (map[s.buyerId] || 0) + (Number(s.totalAmount) || 0);
       }
     }
     for (const h of data.huskSales) {
-      if (h.buyerId) map[h.buyerId] = (map[h.buyerId] || 0) + (h.totalAmount || 0);
+      if (h.buyerId) map[h.buyerId] = (map[h.buyerId] || 0) + (Number(h.totalAmount) || 0);
     }
     for (const pay of data.payments) {
-      if (pay.buyerId) map[pay.buyerId] = (map[pay.buyerId] || 0) - (pay.amount || 0);
+      if (pay.buyerId) map[pay.buyerId] = (map[pay.buyerId] || 0) - (Number(pay.amount) || 0);
     }
     return map;
   }, [data]);

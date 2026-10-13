@@ -15,18 +15,54 @@ export const supabase = isCloudConfigured
   : null;
 
 // Maps each key in the app's data object to its Supabase table + the
-// column/direction it should be sorted by when loaded.
+// column/direction it should be sorted by when loaded, plus which of its
+// columns are actually numbers.
+//
+// IMPORTANT: Postgres/Supabase sends `numeric` columns back as JSON
+// *strings*, not numbers — this is intentional on their end (it avoids
+// silently losing precision on large decimals), but it means every one of
+// these fields arrives as e.g. "2000" instead of 2000. Added with the `+`
+// operator, two string "numbers" concatenate ("2000"+"3000" = "20003000")
+// instead of adding — which stays invisible with one record, then quietly
+// corrupts any total built from more than one. `numericFields` below is
+// used to convert these back into real numbers right when data is loaded,
+// so nothing downstream has to worry about it.
 export const TABLES = {
-  riceTypes: { table: "rice_types", orderBy: "createdAt", ascending: true },
-  suppliers: { table: "suppliers", orderBy: "createdAt", ascending: true },
-  buyers: { table: "buyers", orderBy: "createdAt", ascending: true },
-  supplierPurchases: { table: "supplier_purchases", orderBy: "createdAt", ascending: false },
-  rawPurchases: { table: "raw_purchases", orderBy: "createdAt", ascending: false },
-  millings: { table: "millings", orderBy: "createdAt", ascending: false },
-  stockOuts: { table: "stock_outs", orderBy: "createdAt", ascending: false },
-  payments: { table: "payments", orderBy: "createdAt", ascending: false },
-  expenses: { table: "expenses", orderBy: "createdAt", ascending: false },
-  huskSales: { table: "husk_sales", orderBy: "createdAt", ascending: false },
+  riceTypes: { table: "rice_types", orderBy: "createdAt", ascending: true, numericFields: ["reorderLevel"] },
+  suppliers: { table: "suppliers", orderBy: "createdAt", ascending: true, numericFields: [] },
+  buyers: { table: "buyers", orderBy: "createdAt", ascending: true, numericFields: [] },
+  supplierPurchases: {
+    table: "supplier_purchases",
+    orderBy: "createdAt",
+    ascending: false,
+    numericFields: ["quantity", "pricePerUnit", "totalCost"],
+  },
+  rawPurchases: {
+    table: "raw_purchases",
+    orderBy: "createdAt",
+    ascending: false,
+    numericFields: ["quantityKg", "pricePerKg", "sackSizeKg", "travelFee", "totalCost"],
+  },
+  millings: {
+    table: "millings",
+    orderBy: "createdAt",
+    ascending: false,
+    numericFields: ["rawQuantityKg", "outputQuantity", "huskQuantityKg"],
+  },
+  stockOuts: {
+    table: "stock_outs",
+    orderBy: "createdAt",
+    ascending: false,
+    numericFields: ["quantity", "pricePerUnit", "totalAmount"],
+  },
+  payments: { table: "payments", orderBy: "createdAt", ascending: false, numericFields: ["amount"] },
+  expenses: { table: "expenses", orderBy: "createdAt", ascending: false, numericFields: ["amount"] },
+  huskSales: {
+    table: "husk_sales",
+    orderBy: "createdAt",
+    ascending: false,
+    numericFields: ["quantityKg", "pricePerKg", "totalAmount"],
+  },
 };
 
 // Loads every table and returns the same shaped object App.jsx already
@@ -34,10 +70,15 @@ export const TABLES = {
 export async function loadAll() {
   const out = {};
   for (const key of Object.keys(TABLES)) {
-    const { table, orderBy, ascending } = TABLES[key];
+    const { table, orderBy, ascending, numericFields } = TABLES[key];
     const { data, error } = await supabase.from(table).select("*").order(orderBy, { ascending });
     if (error) throw new Error(`Loading ${table} failed: ${error.message}`);
-    out[key] = data.map(({ createdAt, ...rest }) => rest);
+    out[key] = data.map(({ createdAt, ...rest }) => {
+      for (const field of numericFields) {
+        if (rest[field] != null) rest[field] = Number(rest[field]);
+      }
+      return rest;
+    });
   }
   return out;
 }

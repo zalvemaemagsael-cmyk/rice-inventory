@@ -43,11 +43,14 @@ export function computeMillingCostLedger(rawPurchases, millings) {
 
   for (const ev of events) {
     if (ev.kind === "purchase") {
-      remainingKg += ev.data.quantityKg || 0;
-      remainingValue += ev.data.totalCost || 0;
+      // Number(...) guards against this ever being a string (e.g. a raw,
+      // unconverted value from an API that serializes numeric columns as
+      // text) — without it, `+=` silently concatenates instead of adding.
+      remainingKg += Number(ev.data.quantityKg) || 0;
+      remainingValue += Number(ev.data.totalCost) || 0;
     } else {
       const costPerKgAtTime = remainingKg > 0 ? remainingValue / remainingKg : 0;
-      const rawUsed = ev.data.rawQuantityKg || 0;
+      const rawUsed = Number(ev.data.rawQuantityKg) || 0;
       // Never subtract more value than is actually left in the pool —
       // guards against rounding drift or a milling entry that (through a
       // data error) claims more raw kg than was ever actually bought.
