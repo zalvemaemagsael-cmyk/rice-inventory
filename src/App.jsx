@@ -497,6 +497,8 @@ export default function App({ onLogout }) {
             deleteHuskSale={deleteHuskSale}
             riceTypeName={riceTypeName}
             buyerName={buyerName}
+            buyerBalances={buyerBalances}
+            showToast={showToast}
           />
         )}
         {tab === "stockouts" && (
@@ -508,6 +510,8 @@ export default function App({ onLogout }) {
             deleteStockOut={deleteStockOut}
             riceTypeName={riceTypeName}
             buyerName={buyerName}
+            buyerBalances={buyerBalances}
+            showToast={showToast}
           />
         )}
         {tab === "buyers" && (

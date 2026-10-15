@@ -1,7 +1,10 @@
 import React, { useState } from "react";
-import { Cog, Plus, Trash2, Pencil, X, Wind } from "lucide-react";
+import { Cog, Plus, Trash2, Pencil, X, Wind, Printer } from "lucide-react";
 import { todayStr, fmtDate, fmtNum } from "../lib/format.js";
 import { EmptyState } from "./ui.jsx";
+import PrinterBar from "./PrinterBar.jsx";
+import { buildHuskReceipt } from "../lib/receipt.js";
+import { printReceipt } from "../lib/printer.js";
 
 export default function Milling({
   data,
@@ -15,6 +18,8 @@ export default function Milling({
   deleteHuskSale,
   riceTypeName,
   buyerName,
+  buyerBalances,
+  showToast,
 }) {
   const blankForm = {
     date: todayStr(),
@@ -102,6 +107,21 @@ export default function Milling({
       addHuskSale(payload);
     }
     setHuskForm(blankHuskForm);
+  };
+
+  const printHusk = async (h) => {
+    const buyer = h.buyerId ? buyerName(h.buyerId) : null;
+    const lines = buildHuskReceipt({
+      sale: h,
+      buyerName: buyer,
+      balance: h.buyerId ? buyerBalances[h.buyerId] || 0 : null,
+      formattedDate: fmtDate(h.date),
+    });
+    try {
+      await printReceipt(lines);
+    } catch (e) {
+      showToast(`Couldn't print: ${e.message || e}. Check the printer is on and in range.`);
+    }
   };
 
   return (
@@ -210,6 +230,7 @@ export default function Milling({
       )}
 
       <div className="section-label" style={{ marginTop: 32 }}>{editingHuskId ? "Edit husk/bran sale" : "Sell rice husk/bran"}</div>
+      <PrinterBar showToast={showToast} />
       <div className="hint-line">Husk/bran is the powdery byproduct of milling — record produced amounts above, then sell it here.</div>
       <form className="form-card" onSubmit={submitHusk}>
         <div className="form-row">
@@ -282,6 +303,9 @@ export default function Milling({
                 <div className="receipt-right">
                   <div className="receipt-total">₱ {fmtNum(h.totalAmount)}</div>
                   <div style={{ display: "flex", gap: 4 }}>
+                    <button className="icon-btn" onClick={() => printHusk(h)} title="Print receipt">
+                      <Printer size={15} />
+                    </button>
                     <button className="icon-btn" onClick={() => startEditHusk(h)} title="Edit">
                       <Pencil size={15} />
                     </button>

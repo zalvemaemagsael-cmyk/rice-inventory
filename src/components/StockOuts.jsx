@@ -1,9 +1,12 @@
 import React, { useState } from "react";
-import { Package, Plus, Trash2, Pencil, X } from "lucide-react";
+import { Package, Plus, Trash2, Pencil, X, Printer } from "lucide-react";
 import { todayStr, fmtDate, fmtNum, kgPerUnit } from "../lib/format.js";
 import { EmptyState } from "./ui.jsx";
+import PrinterBar from "./PrinterBar.jsx";
+import { buildSaleReceipt } from "../lib/receipt.js";
+import { printReceipt } from "../lib/printer.js";
 
-export default function StockOuts({ data, stockByType, addStockOut, updateStockOut, deleteStockOut, riceTypeName, buyerName }) {
+export default function StockOuts({ data, stockByType, addStockOut, updateStockOut, deleteStockOut, riceTypeName, buyerName, buyerBalances, showToast }) {
   const blankForm = {
     date: todayStr(),
     riceTypeId: data.riceTypes[0]?.id || "",
@@ -74,8 +77,26 @@ export default function StockOuts({ data, stockByType, addStockOut, updateStockO
     setForm(blankForm);
   };
 
+  const printSale = async (s) => {
+    const riceType = data.riceTypes.find((rt) => rt.id === s.riceTypeId);
+    const buyer = s.buyerId ? buyerName(s.buyerId) : null;
+    const lines = buildSaleReceipt({
+      sale: s,
+      riceType,
+      buyerName: buyer,
+      balance: s.buyerId ? buyerBalances[s.buyerId] || 0 : null,
+      formattedDate: fmtDate(s.date),
+    });
+    try {
+      await printReceipt(lines);
+    } catch (e) {
+      showToast(`Couldn't print: ${e.message || e}. Check the printer is on and in range.`);
+    }
+  };
+
   return (
     <div>
+      <PrinterBar showToast={showToast} />
       <div className="section-label">{editingId ? "Edit stock-out" : "Record finished stock leaving the warehouse"}</div>
       {disabled ? (
         <EmptyState icon={Package} title="Add a rice type first" body="Stock-outs need a rice type to record against." />
@@ -205,6 +226,11 @@ export default function StockOuts({ data, stockByType, addStockOut, updateStockO
                 <div className="receipt-right">
                   {s.reason === "Sale" && <div className="receipt-total">₱ {fmtNum(s.totalAmount)}</div>}
                   <div style={{ display: "flex", gap: 4 }}>
+                    {s.reason === "Sale" && (
+                      <button className="icon-btn" onClick={() => printSale(s)} title="Print receipt">
+                        <Printer size={15} />
+                      </button>
+                    )}
                     <button className="icon-btn" onClick={() => startEdit(s)} title="Edit">
                       <Pencil size={15} />
                     </button>
