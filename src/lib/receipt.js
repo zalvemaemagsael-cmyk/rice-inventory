@@ -131,6 +131,44 @@ export function buildHuskReceipt({ sale, buyerName, balance, formattedDate }) {
   });
 }
 
+// Receipt for buying unmilled palay from a farmer/seller. Unlike a sales
+// receipt, this is money going out, so it shows the seller, the weight and
+// price, the sack count (when a sack size was entered), the travel fee, and
+// the total paid, plus a signature line for the seller's paper record.
+export function buildRawPurchaseReceipt({ purchase, formattedDate }) {
+  const L = [];
+  const add = (lines, bold = false) => lines.forEach((text) => L.push({ text, bold }));
+
+  const travelFee = Number(purchase.travelFee) || 0;
+  const total = Number(purchase.totalCost) || 0;
+  // Goods cost is derived from the stored total so the lines always add up
+  // to exactly what was recorded as paid.
+  const goodsCost = total - travelFee;
+  const sackSize = Number(purchase.sackSizeKg) || 0;
+
+  add(center(RECEIPT_BUSINESS_NAME), true);
+  for (const extra of RECEIPT_EXTRA_LINES) add(center(extra));
+  add(center("PALAY PURCHASE RECEIPT"));
+  add([rule()]);
+  add(row("Date:", formattedDate));
+  add(row("Ref:", String(purchase.id).slice(-6).toUpperCase()));
+  add(row("Bought from:", purchase.source));
+  add([rule()]);
+  add(["Unmilled palay"]);
+  add(row(`${qty(purchase.quantityKg)} kg @ ${money(purchase.pricePerKg)}`, money(goodsCost)));
+  if (sackSize > 0) {
+    add(row("Sacks:", `${qty(Number(purchase.quantityKg) / sackSize)} @ ${qty(sackSize)} kg`));
+  }
+  if (travelFee > 0) add(row("Travel fee", money(travelFee)));
+  if (purchase.notes) add(wrap(`Note: ${purchase.notes}`));
+  add([rule()]);
+  add(row("TOTAL PAID", `PHP ${money(total)}`), true);
+  add([rule()]);
+  add(["", "Seller signature:", "", "________________________________"]);
+  add(center("Thank you!"));
+  return L;
+}
+
 export function linesToText(lines) {
   return lines.map((l) => l.text).join("\n");
 }

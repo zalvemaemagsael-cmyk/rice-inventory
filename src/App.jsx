@@ -482,6 +482,7 @@ export default function App({ onLogout }) {
             addRawPurchase={addRawPurchase}
             updateRawPurchase={updateRawPurchase}
             deleteRawPurchase={deleteRawPurchase}
+            showToast={showToast}
           />
         )}
         {tab === "milling" && (

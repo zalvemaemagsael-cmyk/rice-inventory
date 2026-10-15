@@ -1,11 +1,14 @@
 import React, { useState } from "react";
-import { Sprout, Plus, Trash2, Pencil, X } from "lucide-react";
+import { Sprout, Plus, Trash2, Pencil, X, Printer } from "lucide-react";
 import { todayStr, fmtDate, fmtNum, travelFeeFor } from "../lib/format.js";
 import { EmptyState, KpiCard } from "./ui.jsx";
+import PrinterBar from "./PrinterBar.jsx";
+import { buildRawPurchaseReceipt } from "../lib/receipt.js";
+import { printReceipt } from "../lib/printer.js";
 
 const RAW_STOCK_TARGET_KG = 6000;
 
-export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, totalRawSpendAllTime, addRawPurchase, updateRawPurchase, deleteRawPurchase }) {
+export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, totalRawSpendAllTime, addRawPurchase, updateRawPurchase, deleteRawPurchase, showToast }) {
   const blankForm = {
     date: todayStr(),
     source: "",
@@ -64,6 +67,15 @@ export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, t
     setForm(blankForm);
   };
 
+  const printPurchase = async (p) => {
+    const lines = buildRawPurchaseReceipt({ purchase: p, formattedDate: fmtDate(p.date) });
+    try {
+      await printReceipt(lines);
+    } catch (e) {
+      showToast(`Couldn't print: ${e.message || e}. Check the printer is on and in range.`);
+    }
+  };
+
   return (
     <div>
       <KpiCard
@@ -74,6 +86,7 @@ export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, t
         target={RAW_STOCK_TARGET_KG}
         footer={`₱ ${fmtNum(rawPurchaseCostTotal)} tied up in stock on hand`}
       />
+      <PrinterBar showToast={showToast} />
       <div className="section-label">{editingId ? "Edit raw purchase" : "Buy unmilled palay locally (by weight)"}</div>
       <div className="hint-line">Weights vary by delivery - enter each one as it's bought, then mill it in the Milling tab.</div>
       <form className="form-card" onSubmit={submit}>
@@ -173,6 +186,9 @@ export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, t
                 <div className="receipt-right">
                   <div className="receipt-total">₱ {fmtNum(p.totalCost)}</div>
                   <div style={{ display: "flex", gap: 4 }}>
+                    <button className="icon-btn" onClick={() => printPurchase(p)} title="Print receipt">
+                      <Printer size={15} />
+                    </button>
                     <button className="icon-btn" onClick={() => startEdit(p)} title="Edit">
                       <Pencil size={15} />
                     </button>
