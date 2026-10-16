@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Sprout, Plus, Trash2, Pencil, X, Printer } from "lucide-react";
-import { todayStr, fmtDate, fmtNum, travelFeeFor } from "../lib/format.js";
+import { todayStr, fmtDate, fmtNum, travelFeeBreakdown, splitIntoSacks, sackTotal, sackSummary } from "../lib/format.js";
 import { EmptyState, KpiCard } from "./ui.jsx";
 import PrinterBar from "./PrinterBar.jsx";
 import { buildRawPurchaseReceipt } from "../lib/receipt.js";
@@ -14,20 +14,47 @@ export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, t
     source: "",
     quantityKg: "",
     pricePerKg: "",
+    sackMode: "size", // "size" = enter kg per sack, "count" = enter number of sacks
     sackSizeKg: "",
+    sackCount: "",
     notes: "",
   };
   const [form, setForm] = useState(blankForm);
   const [editingId, setEditingId] = useState(null);
 
   const quantityKg = Number(form.quantityKg) || 0;
-  const sackSizeKg = Number(form.sackSizeKg) || 0;
-  const sacksBought = sackSizeKg > 0 ? quantityKg / sackSizeKg : null;
-  // Travel fee is automatic, based on total weight bought (see format.js
-  // for the tiers). Only shown/applied once a weight has been entered.
-  const travelFee = quantityKg > 0 ? travelFeeFor(quantityKg) : 0;
+
+  // Weight of one sack. Either typed in directly ("kg per sack" mode), or
+  // worked out from the number of sacks ("number of sacks" mode, which
+  // assumes the sacks weigh the same).
+  const sackCountInput = Math.max(0, Math.floor(Number(form.sackCount) || 0));
+  const sackSizeKg =
+    form.sackMode === "count"
+      ? sackCountInput > 0 && quantityKg > 0
+        ? Math.round((quantityKg / sackCountInput) * 10000) / 10000
+        : 0
+      : Number(form.sackSizeKg) || 0;
+
+  // How the purchase splits into sacks, and the travel fee charged per
+  // sack (see format.js for the tiers). Falls back to 60kg loads when no
+  // sack information has been entered.
+  const sackGroups = splitIntoSacks(quantityKg, sackSizeKg);
+  const feeInfo = quantityKg > 0 ? travelFeeBreakdown(quantityKg, sackSizeKg) : { fee: 0, parts: null };
+  const travelFee = feeInfo.fee;
   const goodsCost = quantityKg * (Number(form.pricePerKg) || 0);
   const total = goodsCost + travelFee;
+
+  // A saved sack size with more than 2 decimals (e.g. 33.3333) can only have
+  // come from "number of sacks" mode, so reopen it that way.
+  const restoreSackFields = (p) => {
+    const size = Number(p.sackSizeKg) || 0;
+    if (!(size > 0)) return { sackMode: "size", sackSizeKg: "", sackCount: "" };
+    const messy = Math.abs(size * 100 - Math.round(size * 100)) > 1e-6;
+    if (messy) {
+      return { sackMode: "count", sackSizeKg: "", sackCount: String(Math.round(Number(p.quantityKg) / size)) };
+    }
+    return { sackMode: "size", sackSizeKg: String(size), sackCount: "" };
+  };
 
   const startEdit = (p) => {
     setEditingId(p.id);
@@ -36,7 +63,7 @@ export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, t
       source: p.source,
       quantityKg: String(p.quantityKg),
       pricePerKg: String(p.pricePerKg),
-      sackSizeKg: p.sackSizeKg ? String(p.sackSizeKg) : "",
+      ...restoreSackFields(p),
       notes: p.notes || "",
     });
   };
@@ -53,7 +80,7 @@ export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, t
       source: form.source,
       quantityKg,
       pricePerKg: Number(form.pricePerKg),
-      sackSizeKg,
+      sackSizeKg, // weight of one sack (worked out as total ÷ sacks in "number of sacks" mode)
       travelFee,
       totalCost: total,
       notes: form.notes,
@@ -113,16 +140,38 @@ export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, t
               onChange={(e) => setForm({ ...form, pricePerKg: e.target.value })} required />
           </label>
           <label>
-            Sack size (kg, optional)
-            <input type="number" min="0" step="0.1" placeholder="e.g. 50" value={form.sackSizeKg}
-              onChange={(e) => setForm({ ...form, sackSizeKg: e.target.value })} />
+            Sacks — enter by
+            <select value={form.sackMode} onChange={(e) => setForm({ ...form, sackMode: e.target.value })}>
+              <option value="size">Kg per sack</option>
+              <option value="count">Number of sacks</option>
+            </select>
           </label>
-          <label>
-            Sacks bought
-            <input type="text" value={sacksBought !== null ? fmtNum(sacksBought) : "—"} disabled />
-          </label>
+          {form.sackMode === "size" ? (
+            <label>
+              Kg per sack (optional)
+              <input type="number" min="0" step="0.1" placeholder="e.g. 50" value={form.sackSizeKg}
+                onChange={(e) => setForm({ ...form, sackSizeKg: e.target.value })} />
+            </label>
+          ) : (
+            <label>
+              Number of sacks (optional)
+              <input type="number" min="1" step="1" placeholder="e.g. 3" value={form.sackCount}
+                onChange={(e) => setForm({ ...form, sackCount: e.target.value })} />
+            </label>
+          )}
         </div>
         <div className="form-row">
+          {form.sackMode === "size" ? (
+            <label>
+              Sacks bought
+              <input type="text" value={sackGroups ? fmtNum(sackTotal(sackGroups)) : "—"} disabled />
+            </label>
+          ) : (
+            <label>
+              Kg per sack
+              <input type="text" value={sackSizeKg > 0 ? fmtNum(sackSizeKg) : "—"} disabled />
+            </label>
+          )}
           <label>
             Travel fee (auto)
             <input type="text" value={`₱ ${fmtNum(travelFee)}`} disabled />
@@ -131,15 +180,30 @@ export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, t
             Total cost
             <input type="text" value={`₱ ${fmtNum(total)}`} disabled />
           </label>
+        </div>
+        <div className="form-row">
           <label className="full">
             Notes (optional)
             <input type="text" placeholder="e.g. moisture, variety" value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </label>
         </div>
+        {feeInfo.parts && (
+          <div className="hint-line" style={{ color: "var(--ink)" }}>
+            {sackSummary(quantityKg, sackSizeKg)}. Travel fee:{" "}
+            {feeInfo.parts.map((p) => `${p.count} × ₱${p.feeEach}`).join(" + ")} = ₱{fmtNum(travelFee)}.
+          </div>
+        )}
+        {!feeInfo.parts && quantityKg > 0 && (
+          <div className="hint-line">
+            No sack details entered, so the travel fee is based on 60kg loads. Enter the kg per sack or the number
+            of sacks to charge it per sack instead.
+          </div>
+        )}
         <div className="hint-line">
-          Travel fee is automatic: ₱10 for 40-60kg, ₱7 for 35-39.5kg, ₱5 for 20-34.5kg, and ₱0 under
-          20kg. Over 60kg, each full 60kg counts as one load (₱10) and the leftover is priced the same way.
+          Travel fee is charged per sack by that sack's weight: ₱10 for 40-60kg, ₱7 for 35-39.5kg, ₱5 for
+          20-34.5kg, and ₱0 under 20kg. If the total doesn't divide evenly by the kg per sack, the leftover
+          counts as one smaller sack.
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button type="submit" className="btn-primary">
@@ -167,7 +231,7 @@ export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, t
       ) : (
         <div className="receipt-list">
           {data.rawPurchases.map((p) => {
-            const sacks = p.sackSizeKg > 0 ? p.quantityKg / p.sackSizeKg : null;
+            const sacksText = sackSummary(p.quantityKg, p.sackSizeKg);
             return (
               <div className="receipt" key={p.id}>
                 <div className="receipt-main">
@@ -177,7 +241,7 @@ export default function RawPurchases({ data, rawStockKg, rawPurchaseCostTotal, t
                   </div>
                   <div className="receipt-line2">
                     From {p.source} @ ₱{fmtNum(p.pricePerKg)}/kg
-                    {sacks !== null ? ` — ${fmtNum(sacks)} sack(s) @ ${fmtNum(p.sackSizeKg)}kg` : ""}
+                    {sacksText ? ` — ${sacksText}` : ""}
                     {p.travelFee ? ` — travel fee ₱${fmtNum(p.travelFee)}` : ""}
                   </div>
                   {p.notes && <div className="receipt-notes">{p.notes}</div>}

@@ -1,3 +1,5 @@
+import { splitIntoSacks, sackTotal } from "./format.js";
+
 // Builds 58mm thermal-printer receipts. A 58mm printer like the PT-210
 // prints 32 characters per line, so everything here is laid out as plain
 // text lines no wider than that. The same lines are used both for direct
@@ -144,7 +146,7 @@ export function buildRawPurchaseReceipt({ purchase, formattedDate }) {
   // Goods cost is derived from the stored total so the lines always add up
   // to exactly what was recorded as paid.
   const goodsCost = total - travelFee;
-  const sackSize = Number(purchase.sackSizeKg) || 0;
+  const sackGroups = splitIntoSacks(purchase.quantityKg, purchase.sackSizeKg);
 
   add(center(RECEIPT_BUSINESS_NAME), true);
   for (const extra of RECEIPT_EXTRA_LINES) add(center(extra));
@@ -156,8 +158,16 @@ export function buildRawPurchaseReceipt({ purchase, formattedDate }) {
   add([rule()]);
   add(["Unmilled palay"]);
   add(row(`${qty(purchase.quantityKg)} kg @ ${money(purchase.pricePerKg)}`, money(goodsCost)));
-  if (sackSize > 0) {
-    add(row("Sacks:", `${qty(Number(purchase.quantityKg) / sackSize)} @ ${qty(sackSize)} kg`));
+  if (sackGroups) {
+    // One line when the sacks are equal; one line per group otherwise
+    // (e.g. "3 @ 40 kg" and "1 @ 30 kg"). Counts only — the travel fee
+    // below is the amount that was actually recorded.
+    if (sackGroups.length === 1) {
+      add(row("Sacks:", `${sackGroups[0].count} @ ${qty(sackGroups[0].kg)} kg`));
+    } else {
+      add(row("Sacks:", String(sackTotal(sackGroups))));
+      for (const g of sackGroups) add([`  ${g.count} @ ${qty(g.kg)} kg`]);
+    }
   }
   if (travelFee > 0) add(row("Travel fee", money(travelFee)));
   if (purchase.notes) add(wrap(`Note: ${purchase.notes}`));
