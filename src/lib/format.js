@@ -15,24 +15,34 @@ export function fmtNum(n) {
   return Number(n).toLocaleString("en-PH", { maximumFractionDigits: 2 });
 }
 
-// Travel fee for a raw palay purchase, scaled for large quantities.
-// A single delivery load caps out around 40kg; every full 40kg load costs
-// ₱10, and whatever's left over (a partial load) is charged at the same
-// tiered rate as a standalone small purchase: 30-39kg -> ₱7, under 30kg
-// -> ₱5. So buying, say, 90kg in one entry means 2 full loads (₱20) plus
-// a 10kg partial load (₱5) = ₱25 — rather than a flat ₱10 no matter how
-// much was bought.
+// Travel fee for a raw palay purchase, based on how much weight is
+// delivered. One delivery load is up to 60kg, priced by weight:
+//   40kg or more (up to 60kg) -> PHP 10
+//   35kg to 39.5kg            -> PHP 7
+//   20kg to 34.5kg            -> PHP 5
+//   under 20kg                -> PHP 0
+// Each tier starts at its lower number, so in-between weights (e.g. 39.7kg)
+// fall into the tier below them.
+//
+// For larger purchases, every full 60kg counts as one load at PHP 10, and
+// whatever is left over is priced by the same tiers above. Example: 130kg
+// = 2 full loads (PHP 20) + a 10kg leftover (PHP 0) = PHP 20.
+export const TRAVEL_LOAD_CAP_KG = 60;
+
+function feeForSingleLoad(kg) {
+  if (kg >= 40) return 10;
+  if (kg >= 35) return 7;
+  if (kg >= 20) return 5;
+  return 0;
+}
+
 export function travelFeeFor(quantityKg) {
-  const kg = Number(quantityKg) || 0;
+  // Round to avoid floating-point noise right at a tier boundary.
+  const kg = Math.round((Number(quantityKg) || 0) * 100) / 100;
   if (kg <= 0) return 0;
-  const LOAD_CAP_KG = 40;
-  const fullLoads = Math.floor(kg / LOAD_CAP_KG);
-  const remainder = kg - fullLoads * LOAD_CAP_KG;
-  let fee = fullLoads * 10;
-  if (remainder > 0) {
-    fee += remainder >= 30 ? 7 : 5;
-  }
-  return fee;
+  const fullLoads = Math.floor(kg / TRAVEL_LOAD_CAP_KG);
+  const remainder = Math.round((kg - fullLoads * TRAVEL_LOAD_CAP_KG) * 100) / 100;
+  return fullLoads * 10 + feeForSingleLoad(remainder);
 }
 
 // Extracts the kg-per-unit from a rice type's unit label, e.g.
