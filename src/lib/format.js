@@ -15,30 +15,12 @@ export function fmtNum(n) {
   return Number(n).toLocaleString("en-PH", { maximumFractionDigits: 2 });
 }
 
-// ---- Travel fee for raw palay purchases ----
+// ---- Sacks for raw palay purchases ----
 //
-// The fee depends on the weight of what is carried at one time:
-//   40kg or more (up to 60kg) -> PHP 10
-//   35kg to 39.5kg            -> PHP 7
-//   20kg to 34.5kg            -> PHP 5
-//   under 20kg                -> PHP 0
-// Each tier starts at its lower number, so in-between weights (e.g. 39.7kg)
-// fall into the tier below them.
-//
-// When the purchase is split into sacks, the fee is charged PER SACK using
-// that sack's weight. Example: 150kg as 3 sacks of 50kg = 3 x PHP 10 = PHP 30.
-// If no sack information is given, it falls back to 60kg loads: every full
-// 60kg counts as one load (PHP 10) and the leftover is priced by the tiers.
-export const TRAVEL_LOAD_CAP_KG = 60;
+// (The travel fee is entered by hand on the Raw Rice form — nothing here
+// calculates it.)
 
 const round2 = (n) => Math.round(n * 100) / 100;
-
-function feeForSingleLoad(kg) {
-  if (kg >= 40) return 10;
-  if (kg >= 35) return 7;
-  if (kg >= 20) return 5;
-  return 0;
-}
 
 // Splits a purchase into sacks, returning groups like
 //   [{ count: 3, kg: 50 }]                      3 equal sacks of 50kg
@@ -79,25 +61,6 @@ export function sackSummary(totalKg, sackSizeKg) {
   return `${n} ${word} (${groups.map((g) => `${g.count} @ ${kg(g)}`).join(" + ")})`;
 }
 
-// The fee, plus how it was made up (for showing the working to the user).
-// `parts` is null when no sack information was given.
-export function travelFeeBreakdown(totalKg, sackSizeKg) {
-  const groups = splitIntoSacks(totalKg, sackSizeKg);
-  if (groups) {
-    const parts = groups.map((g) => ({ count: g.count, kg: round2(g.kg), feeEach: feeForSingleLoad(round2(g.kg)) }));
-    return { fee: parts.reduce((sum, p) => sum + p.count * p.feeEach, 0), parts };
-  }
-  // No sack info: price by 60kg loads.
-  const kg = round2(Number(totalKg) || 0);
-  if (kg <= 0) return { fee: 0, parts: null };
-  const fullLoads = Math.floor(kg / TRAVEL_LOAD_CAP_KG);
-  const remainder = round2(kg - fullLoads * TRAVEL_LOAD_CAP_KG);
-  return { fee: fullLoads * 10 + feeForSingleLoad(remainder), parts: null };
-}
-
-export function travelFeeFor(quantityKg, sackSizeKg = 0) {
-  return travelFeeBreakdown(quantityKg, sackSizeKg).fee;
-}
 
 // Extracts the kg-per-unit from a rice type's unit label, e.g.
 // "sack (25kg)" -> 25, "sack (50kg)" -> 50, "kg" -> 1 (no conversion).
