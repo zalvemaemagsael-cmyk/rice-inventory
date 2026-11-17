@@ -63,6 +63,16 @@ export const TABLES = {
     ascending: false,
     numericFields: ["quantityKg", "pricePerKg", "totalAmount"],
   },
+  // `optional`: if this table hasn't been created in Supabase yet (the SQL
+  // migration hasn't been run), treat it as empty instead of failing the
+  // whole app. Saving to it will still show an error until it exists.
+  palaySales: {
+    table: "palay_sales",
+    orderBy: "createdAt",
+    ascending: false,
+    numericFields: ["quantityKg", "pricePerKg", "totalAmount"],
+    optional: true,
+  },
 };
 
 // Loads every table and returns the same shaped object App.jsx already
@@ -70,9 +80,15 @@ export const TABLES = {
 export async function loadAll() {
   const out = {};
   for (const key of Object.keys(TABLES)) {
-    const { table, orderBy, ascending, numericFields } = TABLES[key];
+    const { table, orderBy, ascending, numericFields, optional } = TABLES[key];
     const { data, error } = await supabase.from(table).select("*").order(orderBy, { ascending });
-    if (error) throw new Error(`Loading ${table} failed: ${error.message}`);
+    if (error) {
+      if (optional) {
+        out[key] = [];
+        continue;
+      }
+      throw new Error(`Loading ${table} failed: ${error.message}`);
+    }
     out[key] = data.map(({ createdAt, ...rest }) => {
       for (const field of numericFields) {
         if (rest[field] != null) rest[field] = Number(rest[field]);
@@ -86,9 +102,12 @@ export async function loadAll() {
 // True only if every table has zero rows (fresh/empty cloud database).
 export async function isCloudEmpty() {
   for (const key of Object.keys(TABLES)) {
-    const { table } = TABLES[key];
+    const { table, optional } = TABLES[key];
     const { count, error } = await supabase.from(table).select("id", { count: "exact", head: true });
-    if (error) throw new Error(`Checking ${table} failed: ${error.message}`);
+    if (error) {
+      if (optional) continue;
+      throw new Error(`Checking ${table} failed: ${error.message}`);
+    }
     if (count > 0) return false;
   }
   return true;
@@ -117,7 +136,7 @@ export async function deleteRow(key, id) {
 // Order matters: tables referenced by others (riceTypes, suppliers,
 // buyers) must be inserted before the tables that reference them.
 export async function importAll(data) {
-  for (const key of ["riceTypes", "suppliers", "buyers", "supplierPurchases", "rawPurchases", "millings", "stockOuts", "payments", "expenses", "huskSales"]) {
+  for (const key of ["riceTypes", "suppliers", "buyers", "supplierPurchases", "rawPurchases", "millings", "stockOuts", "payments", "expenses", "huskSales", "palaySales"]) {
     const rows = data[key] || [];
     if (rows.length === 0) continue;
     const { table } = TABLES[key];

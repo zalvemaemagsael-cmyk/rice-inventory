@@ -133,6 +133,24 @@ export function buildHuskReceipt({ sale, buyerName, balance, formattedDate }) {
   });
 }
 
+export function buildPalaySaleReceipt({ sale, buyerName, balance, formattedDate }) {
+  return buildReceipt({
+    title: "SALES RECEIPT",
+    ref: String(sale.id).slice(-6).toUpperCase(),
+    date: formattedDate,
+    buyer: buyerName,
+    item: {
+      name: "Palay (unmilled)",
+      qtyText: `${qty(sale.quantityKg)} kg`,
+      unitPrice: sale.pricePerKg,
+      amount: sale.totalAmount,
+    },
+    total: sale.totalAmount,
+    balance: buyerName ? balance : null,
+    notes: sale.notes,
+  });
+}
+
 // Receipt for buying unmilled palay from a farmer/seller. Unlike a sales
 // receipt, this is money going out, so it shows the seller, the weight and
 // price, the sack count (when a sack size was entered), the travel fee, and

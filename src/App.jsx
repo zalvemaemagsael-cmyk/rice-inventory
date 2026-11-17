@@ -16,6 +16,7 @@ import Suppliers from "./components/Suppliers.jsx";
 import Buyers from "./components/Buyers.jsx";
 import Expenses from "./components/Expenses.jsx";
 import Reports from "./components/Reports.jsx";
+import SellPalay from "./components/SellPalay.jsx";
 
 export default function App({ onLogout }) {
   const [data, setData] = useState(null);
@@ -96,7 +97,7 @@ export default function App({ onLogout }) {
 
   // ---- derived stock ----
   // Raw (unmilled) stock: one pool tracked by weight (kg), fed by local
-  // palay purchases, drawn down by milling runs.
+  // palay purchases, drawn down by milling runs and by palay sold raw.
   // NOTE: these hooks must run on every render (even before `data` has
   // loaded) so the hook order never changes between renders. They guard
   // internally against `data` being null instead of being skipped via an
@@ -105,7 +106,8 @@ export default function App({ onLogout }) {
     if (!data) return 0;
     const bought = data.rawPurchases.reduce((sum, p) => sum + (Number(p.quantityKg) || 0), 0);
     const milled = data.millings.reduce((sum, m) => sum + (Number(m.rawQuantityKg) || 0), 0);
-    return bought - milled;
+    const soldRaw = data.palaySales.reduce((sum, x) => sum + (Number(x.quantityKg) || 0), 0);
+    return bought - milled - soldRaw;
   }, [data]);
 
   // Lifetime reference total — every peso ever spent buying palay, never
@@ -121,8 +123,8 @@ export default function App({ onLogout }) {
   // permanent per-milling history record as each batch gets milled. See
   // lib/costing.js for why this is more correct than a simple average.
   const millingLedger = useMemo(() => {
-    if (!data) return { remainingKg: 0, remainingValue: 0, millingCostRecords: [] };
-    return computeMillingCostLedger(data.rawPurchases, data.millings);
+    if (!data) return { remainingKg: 0, remainingValue: 0, millingCostRecords: [], palaySaleCostRecords: [] };
+    return computeMillingCostLedger(data.rawPurchases, data.millings, data.palaySales);
   }, [data]);
 
   // Cost still tied up in palay that hasn't been milled yet — this is
@@ -151,6 +153,24 @@ export default function App({ onLogout }) {
       return { ...r, riceTypeLabel: rt ? `${rt.name} · ${rt.grade}` : "—" };
     });
   }, [data, millingLedger]);
+
+  // Palay sold raw (without milling). The cost of the palay that left is
+  // taken from the same cost pool, at the average cost at the time of the
+  // sale — so each sale has its own permanent cost figure, and the cost of
+  // stock on hand stays correct.
+  const costOfPalaySold = useMemo(
+    () => millingLedger.palaySaleCostRecords.reduce((sum, r) => sum + (Number(r.costSubtracted) || 0), 0),
+    [millingLedger]
+  );
+  const palaySaleCostById = useMemo(() => {
+    const map = {};
+    for (const r of millingLedger.palaySaleCostRecords) map[r.id] = r;
+    return map;
+  }, [millingLedger]);
+  const totalPalaySales = useMemo(() => {
+    if (!data) return 0;
+    return data.palaySales.reduce((sum, x) => sum + (Number(x.totalAmount) || 0), 0);
+  }, [data]);
 
   // Finished stock per rice type: two acquisition paths feed the same pool -
   // buying already-milled rice from suppliers, and milling your own palay.
@@ -186,8 +206,8 @@ export default function App({ onLogout }) {
     return data.huskSales.reduce((sum, h) => sum + (Number(h.totalAmount) || 0), 0);
   }, [data]);
 
-  // Each buyer's running balance: their linked "Sale" stock-outs and husk
-  // sales minus their recorded payments. Positive = they still owe you
+  // Each buyer's running balance: their linked "Sale" stock-outs, husk
+  // sales and palay sales minus their recorded payments. Positive = they still owe you
   // (utang).
   const buyerBalances = useMemo(() => {
     if (!data) return {};
@@ -200,6 +220,9 @@ export default function App({ onLogout }) {
     }
     for (const h of data.huskSales) {
       if (h.buyerId) map[h.buyerId] = (map[h.buyerId] || 0) + (Number(h.totalAmount) || 0);
+    }
+    for (const x of data.palaySales) {
+      if (x.buyerId) map[x.buyerId] = (map[x.buyerId] || 0) + (Number(x.totalAmount) || 0);
     }
     for (const pay of data.payments) {
       if (pay.buyerId) map[pay.buyerId] = (map[pay.buyerId] || 0) - (Number(pay.amount) || 0);
@@ -311,7 +334,10 @@ export default function App({ onLogout }) {
   };
   const deleteBuyer = (id) => {
     const inUse =
-      data.stockOuts.some((s) => s.buyerId === id) || data.payments.some((p) => p.buyerId === id);
+      data.stockOuts.some((s) => s.buyerId === id) ||
+      data.huskSales.some((h) => h.buyerId === id) ||
+      data.palaySales.some((x) => x.buyerId === id) ||
+      data.payments.some((p) => p.buyerId === id);
     if (inUse) {
       showToast("Can't remove — this buyer has sales or payment history.");
       return;
@@ -366,6 +392,22 @@ export default function App({ onLogout }) {
   const deleteMilling = (id) => {
     const next = { ...data, millings: data.millings.filter((m) => m.id !== id) };
     isCloudConfigured ? withCloudDelete("millings", next, id) : persistLocal(next);
+  };
+
+  const addPalaySale = (x) => {
+    const row = { ...x, id: uid("pl") };
+    const next = { ...data, palaySales: [row, ...data.palaySales] };
+    isCloudConfigured ? withCloud("palaySales", next, row) : persistLocal(next);
+    showToast("Palay sale recorded — unmilled stock updated.");
+  };
+  const updatePalaySale = (id, patch) => {
+    const next = { ...data, palaySales: data.palaySales.map((x) => (x.id === id ? { ...x, ...patch } : x)) };
+    isCloudConfigured ? withCloudUpdate("palaySales", next, id, patch) : persistLocal(next);
+    showToast("Palay sale updated.");
+  };
+  const deletePalaySale = (id) => {
+    const next = { ...data, palaySales: data.palaySales.filter((x) => x.id !== id) };
+    isCloudConfigured ? withCloudDelete("palaySales", next, id) : persistLocal(next);
   };
 
   const addHuskSale = (h) => {
@@ -485,6 +527,20 @@ export default function App({ onLogout }) {
             showToast={showToast}
           />
         )}
+        {tab === "sellPalay" && (
+          <SellPalay
+            data={data}
+            rawStockKg={rawStockKg}
+            rawPurchaseCostTotal={rawPurchaseCostTotal}
+            palaySaleCostById={palaySaleCostById}
+            buyerName={buyerName}
+            buyerBalances={buyerBalances}
+            addPalaySale={addPalaySale}
+            updatePalaySale={updatePalaySale}
+            deletePalaySale={deletePalaySale}
+            showToast={showToast}
+          />
+        )}
         {tab === "milling" && (
           <Milling
             data={data}
@@ -538,9 +594,11 @@ export default function App({ onLogout }) {
           <Reports
             data={data}
             costOfMilledPalay={costOfMilledPalay}
+            costOfPalaySold={costOfPalaySold}
             millingCostHistory={millingCostHistory}
             totalExpenses={totalExpenses}
             totalHuskSales={totalHuskSales}
+            totalPalaySales={totalPalaySales}
             buyerBalances={buyerBalances}
             riceTypeName={riceTypeName}
             supplierName={supplierName}

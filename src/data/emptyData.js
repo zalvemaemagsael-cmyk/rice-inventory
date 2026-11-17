@@ -22,4 +22,5 @@ export const emptyData = () => ({
   payments: [],
   expenses: [],
   huskSales: [],
+  palaySales: [],
 });

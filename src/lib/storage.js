@@ -1,3 +1,5 @@
+import { emptyData } from "../data/emptyData.js";
+
 const STORAGE_KEY = "rice-inventory-data";
 
 // Persists to the browser's localStorage, so data survives refreshes and
@@ -8,7 +10,15 @@ const STORAGE_KEY = "rice-inventory-data";
 export function loadData() {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Data saved by an older version of the app may be missing lists that
+    // were added later (e.g. palaySales); fill those in as empty so nothing
+    // downstream crashes on `undefined.reduce(...)`.
+    for (const [key, value] of Object.entries(emptyData())) {
+      if (Array.isArray(value) && !Array.isArray(parsed[key])) parsed[key] = [];
+    }
+    return parsed;
   } catch (e) {
     console.error("Failed to load inventory data", e);
     return null;

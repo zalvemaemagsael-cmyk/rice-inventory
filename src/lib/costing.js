@@ -18,28 +18,35 @@
 //     and its cost, i.e. what shows as "cost of stock on hand")
 //   millingCostRecords — one entry per milling run, with exactly how much
 //     cost was subtracted for that run (for the Reports history table)
-export function computeMillingCostLedger(rawPurchases, millings) {
-  // Both arrays are stored newest-first; reverse to process oldest-first.
+//   palaySaleCostRecords — the same, for each sale of raw palay: palay that
+//     is sold unmilled leaves the pool at the average cost at that moment,
+//     so the cost of the palay sold is known for each sale
+export function computeMillingCostLedger(rawPurchases, millings, palaySales = []) {
+  // All arrays are stored newest-first; reverse to process oldest-first.
   const purchasesAsc = [...rawPurchases].reverse();
   const millingsAsc = [...millings].reverse();
+  const salesAsc = [...palaySales].reverse();
 
   const events = [
     ...purchasesAsc.map((p, i) => ({ kind: "purchase", date: p.date, seq: i, data: p })),
     ...millingsAsc.map((m, i) => ({ kind: "milling", date: m.date, seq: i, data: m })),
+    ...salesAsc.map((x, i) => ({ kind: "sale", date: x.date, seq: i, data: x })),
   ];
 
-  // Chronological by date; same-day purchases are assumed to happen
-  // before same-day millings (you can't mill palay you haven't bought
-  // yet), then original recorded order as the final tiebreaker.
+  // Chronological by date; on the same day, purchases come first (you
+  // can't mill or sell palay you haven't bought yet), then millings, then
+  // palay sales, with original recorded order as the final tiebreaker.
+  const rank = { purchase: 0, milling: 1, sale: 2 };
   events.sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-    if (a.kind !== b.kind) return a.kind === "purchase" ? -1 : 1;
+    if (a.kind !== b.kind) return rank[a.kind] - rank[b.kind];
     return a.seq - b.seq;
   });
 
   let remainingKg = 0;
   let remainingValue = 0;
   const millingCostRecords = [];
+  const palaySaleCostRecords = [];
 
   for (const ev of events) {
     if (ev.kind === "purchase") {
@@ -48,6 +55,19 @@ export function computeMillingCostLedger(rawPurchases, millings) {
       // text) — without it, `+=` silently concatenates instead of adding.
       remainingKg += Number(ev.data.quantityKg) || 0;
       remainingValue += Number(ev.data.totalCost) || 0;
+    } else if (ev.kind === "sale") {
+      const costPerKgAtTime = remainingKg > 0 ? remainingValue / remainingKg : 0;
+      const kgSold = Number(ev.data.quantityKg) || 0;
+      const costSubtracted = Math.min(remainingValue, costPerKgAtTime * kgSold);
+      remainingKg = Math.max(0, remainingKg - kgSold);
+      remainingValue = Math.max(0, remainingValue - costSubtracted);
+      palaySaleCostRecords.push({
+        id: ev.data.id,
+        date: ev.data.date,
+        quantityKg: kgSold,
+        costPerKgAtTime,
+        costSubtracted,
+      });
     } else {
       const costPerKgAtTime = remainingKg > 0 ? remainingValue / remainingKg : 0;
       const rawUsed = Number(ev.data.rawQuantityKg) || 0;
@@ -70,5 +90,5 @@ export function computeMillingCostLedger(rawPurchases, millings) {
     }
   }
 
-  return { remainingKg, remainingValue, millingCostRecords };
+  return { remainingKg, remainingValue, millingCostRecords, palaySaleCostRecords };
 }

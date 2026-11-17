@@ -1,10 +1,11 @@
 import React from "react";
-import { LayoutGrid, Truck, Sprout, Cog, Package, Wheat, Users, BarChart3, HandCoins, Receipt } from "lucide-react";
+import { LayoutGrid, Truck, Sprout, Cog, Package, Wheat, Users, BarChart3, HandCoins, Receipt, Scale } from "lucide-react";
 
 export const TABS = [
   { id: "dashboard", label: "Stock Room", icon: LayoutGrid },
   { id: "supplierPurchases", label: "Supplier Purchases", icon: Truck },
   { id: "rawPurchases", label: "Raw Rice", icon: Sprout },
+  { id: "sellPalay", label: "Sell Palay", icon: Scale },
   { id: "milling", label: "Milling", icon: Cog },
   { id: "stockouts", label: "Stock Out", icon: Package },
   { id: "buyers", label: "Buyers", icon: HandCoins },

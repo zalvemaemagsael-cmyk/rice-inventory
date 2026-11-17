@@ -8,6 +8,7 @@ export const TXN_CATEGORIES = [
   { key: "rawPurchase", label: "Raw Rice Purchases" },
   { key: "milling", label: "Milling" },
   { key: "huskSale", label: "Husk/Bran Sold" },
+  { key: "palaySale", label: "Palay Sold" },
   { key: "stockOut", label: "Stock Out" },
   { key: "expense", label: "Expenses" },
 ];
@@ -15,15 +16,11 @@ export const TXN_CATEGORIES = [
 // Normalizes every transaction-bearing table into one flat list of rows
 // shaped { id, date, category, type, quantity, unit, description, amount,
 // direction }, sorted most-recent first. `amount` is null for entries
-// with no direct cash value. `direction` is "in"/"out" for real cash
-// movement, or "moved" for a milling row — no new cash leaves the
-// business at milling time (that already happened at purchase time), but
-// `avgRawCostPerKg` lets us show exactly how much of the earlier palay
-// spend this specific run converted from "unmilled stock" into
-// "production cost" (matching what the Reports totals use). `quantity`/
-// `unit` are null/"" where a single quantity doesn't apply (e.g. an
-// expense).
-export function buildTransactionRows(data, riceTypeName, supplierName, buyerName, avgRawCostPerKg = 0) {
+// with no direct cash value (e.g. a milling run — no new cash leaves the
+// business then, since the palay was paid for at purchase time).
+// `direction` is "in"/"out" for real cash movement. `quantity`/`unit` are
+// null/"" where a single quantity doesn't apply (e.g. an expense).
+export function buildTransactionRows(data, riceTypeName, supplierName, buyerName) {
   const rows = [];
   const riceTypeUnit = (id) => data.riceTypes.find((rt) => rt.id === id)?.unit || "";
 
@@ -81,6 +78,21 @@ export function buildTransactionRows(data, riceTypeName, supplierName, buyerName
       unit: "kg",
       description: buyer ? `Sold to ${buyer}` : "Cash sale",
       amount: h.totalAmount || 0,
+      direction: "in",
+    });
+  }
+
+  for (const x of data.palaySales) {
+    const buyer = x.buyerId ? buyerName(x.buyerId) : null;
+    rows.push({
+      id: x.id,
+      date: x.date,
+      category: "palaySale",
+      type: "Palay Sold",
+      quantity: x.quantityKg,
+      unit: "kg",
+      description: buyer ? `Unmilled palay — sold to ${buyer}` : "Unmilled palay — cash sale",
+      amount: x.totalAmount || 0,
       direction: "in",
     });
   }

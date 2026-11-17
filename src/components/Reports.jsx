@@ -35,7 +35,7 @@ function byMonth(records, amountKey) {
   return Object.values(map).sort((a, b) => (a.key > b.key ? 1 : -1));
 }
 
-export default function Reports({ data, costOfMilledPalay, millingCostHistory, totalExpenses, totalHuskSales, buyerBalances, riceTypeName, supplierName, buyerName }) {
+export default function Reports({ data, costOfMilledPalay, costOfPalaySold, millingCostHistory, totalExpenses, totalHuskSales, totalPalaySales, buyerBalances, riceTypeName, supplierName, buyerName }) {
   const sales = useMemo(() => data.stockOuts.filter((s) => s.reason === "Sale"), [data.stockOuts]);
 
   const totalGrossSales = useMemo(
@@ -53,8 +53,8 @@ export default function Reports({ data, costOfMilledPalay, millingCostHistory, t
     [data.buyers, buyerBalances]
   );
 
-  const totalCosts = costOfMilledPalay + totalSupplierCost + totalExpenses;
-  const totalRevenue = totalGrossSales + totalHuskSales;
+  const totalCosts = costOfMilledPalay + costOfPalaySold + totalSupplierCost + totalExpenses;
+  const totalRevenue = totalGrossSales + totalHuskSales + totalPalaySales;
   const estimatedProfit = totalRevenue - totalCosts;
 
   const salesByType = useMemo(() => {
@@ -65,10 +65,14 @@ export default function Reports({ data, costOfMilledPalay, millingCostHistory, t
     }
     const entries = Object.entries(map).map(([name, value]) => ({ name, value }));
     if (totalHuskSales > 0) entries.push({ name: "Rice husk/bran", value: totalHuskSales });
+    if (totalPalaySales > 0) entries.push({ name: "Palay (unmilled)", value: totalPalaySales });
     return entries.sort((a, b) => b.value - a.value);
-  }, [sales, riceTypeName, totalHuskSales]);
+  }, [sales, riceTypeName, totalHuskSales, totalPalaySales]);
 
-  const salesOverTime = useMemo(() => byMonth(sales, "totalAmount"), [sales]);
+  const salesOverTime = useMemo(
+    () => byMonth([...sales, ...data.huskSales, ...data.palaySales], "totalAmount"),
+    [sales, data.huskSales, data.palaySales]
+  );
 
   const expensesByCategory = useMemo(() => {
     const map = {};
@@ -80,6 +84,7 @@ export default function Reports({ data, costOfMilledPalay, millingCostHistory, t
 
   const costBreakdown = [
     { name: "Raw palay (milled)", value: costOfMilledPalay },
+    { name: "Palay (sold raw)", value: costOfPalaySold },
     { name: "Supplier purchases", value: totalSupplierCost },
     ...expensesByCategory,
   ].filter((c) => c.value > 0);
@@ -130,7 +135,7 @@ export default function Reports({ data, costOfMilledPalay, millingCostHistory, t
     downloadTransactionsCSV(filteredRows, filename);
   };
 
-  const hasAnyData = sales.length > 0 || costOfMilledPalay > 0 || totalSupplierCost > 0 || totalExpenses > 0 || totalHuskSales > 0;
+  const hasAnyData = sales.length > 0 || costOfMilledPalay > 0 || totalSupplierCost > 0 || totalExpenses > 0 || totalHuskSales > 0 || totalPalaySales > 0 || costOfPalaySold > 0;
 
   if (!hasAnyData) {
     return (
@@ -146,10 +151,11 @@ export default function Reports({ data, costOfMilledPalay, millingCostHistory, t
     <div>
       <div className="section-label">Business overview</div>
       <div className="hint-line">
-        Estimated profit = gross sales (rice + husk/bran) − (milled palay costs + supplier purchase costs + other expenses).
-        Palay costs only count here once that stock is actually milled — money spent on palay still
-        sitting unmilled shows on the Raw Rice tab instead, not as a cost yet. This is a simplified
-        estimate — it doesn't account for spoilage or unsold finished-rice inventory.
+        Estimated profit = gross sales (rice + husk/bran + palay sold raw) − (cost of palay milled + cost of
+        palay sold raw + supplier purchase costs + other expenses). Palay costs only count here once that
+        stock is milled or sold — money spent on palay still sitting unmilled shows on the Raw Rice tab
+        instead, not as a cost yet. This is a simplified estimate — it doesn't account for spoilage or
+        unsold finished-rice inventory.
       </div>
 
       <div className="report-summary-row">
